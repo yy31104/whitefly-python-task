@@ -1,0 +1,11 @@
+Flask
+FastAPI
+uvicorn
+SQLAlchemy
+Jinja2
+celery
+redis
+python-dotenv
+gunicorn
+pydantic
+email-validator
