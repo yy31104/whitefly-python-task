@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from flask_app.app.forms import extract_sync_form_data
-from shared.services import create_submission_sync, list_submissions
+from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
+from shared.services import create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
 bp = Blueprint("main", __name__)
@@ -28,6 +28,22 @@ def sync_form():
         return redirect(url_for("main.submissions"))
 
     return render_template("sync_form.html", form_data={})
+
+
+@bp.route("/async-form", methods=["GET", "POST"])
+def async_form():
+    if request.method == "POST":
+        form_data = extract_async_form_data(request.form)
+        try:
+            task_id = enqueue_submission_async(**form_data)
+        except ValidationError as exc:
+            flash(str(exc), "error")
+            return render_template("async_form.html", form_data=form_data), 400
+
+        flash(f"Submission queued. Task ID: {task_id}", "success")
+        return redirect(url_for("main.async_form"))
+
+    return render_template("async_form.html", form_data={})
 
 
 @bp.get("/submissions")
