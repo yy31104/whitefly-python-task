@@ -9,9 +9,9 @@
   <h1>Hello World</h1>
   <p>This is the FastAPI M3 landing page.</p>
   <ul>
-    <li><a href="/sync-form">Sync form</a></li>
-    <li><a href="/async-form">Async form</a></li>
-    <li><a href="/submissions">Submissions</a></li>
+    <li><a href="{{ request.url_for('sync_form_get') }}">Sync form</a></li>
+    <li><a href="{{ request.url_for('async_form_get') }}">Async form</a></li>
+    <li><a href="{{ request.url_for('submissions') }}">Submissions</a></li>
   </ul>
 </body>
 </html>

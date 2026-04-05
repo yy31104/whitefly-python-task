@@ -14,14 +14,19 @@ def _default_database_url() -> str:
     return f"sqlite:///{(root_dir / 'app.db').as_posix()}"
 
 
-def create_app(database_url: str | None = None) -> FastAPI:
+def create_app(
+    database_url: str | None = None,
+    url_prefix: str | None = None,
+) -> FastAPI:
     app = FastAPI(title="Whitefly FastAPI App")
 
     db_url = database_url or os.getenv("DATABASE_URL", _default_database_url())
+    prefix = (url_prefix if url_prefix is not None else os.getenv("FASTAPI_URL_PREFIX", "")).rstrip("/")
     init_database(db_url)
     app.state.database_url = db_url
+    app.state.url_prefix = prefix
 
-    app.include_router(router)
+    app.include_router(router, prefix=prefix)
     return app
 
 

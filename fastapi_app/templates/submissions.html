@@ -7,7 +7,11 @@
 </head>
 <body>
   <h1>Saved Submissions</h1>
-  <p><a href="/">Home</a> | <a href="/sync-form">Sync form</a> | <a href="/async-form">Async form</a></p>
+  <p>
+    <a href="{{ request.url_for('index') }}">Home</a> |
+    <a href="{{ request.url_for('sync_form_get') }}">Sync form</a> |
+    <a href="{{ request.url_for('async_form_get') }}">Async form</a>
+  </p>
 
   {% if message %}
     <ul>

@@ -15,7 +15,13 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 
 
-def _redirect_with_message(path: str, message: str, category: str = "success") -> RedirectResponse:
+def _redirect_with_message(
+    request: Request,
+    route_name: str,
+    message: str,
+    category: str = "success",
+) -> RedirectResponse:
+    path = request.app.url_path_for(route_name)
     query = urlencode({"message": message, "category": category})
     return RedirectResponse(url=f"{path}?{query}", status_code=303)
 
@@ -76,7 +82,7 @@ async def sync_form_post(
             status_code=400,
         )
 
-    return _redirect_with_message("/submissions", "Submission saved.")
+    return _redirect_with_message(request, "submissions", "Submission saved.")
 
 
 @router.get("/async-form", response_class=HTMLResponse)
@@ -117,7 +123,7 @@ async def async_form_post(
             status_code=400,
         )
 
-    return _redirect_with_message("/async-form", f"Submission queued. Task ID: {task_id}")
+    return _redirect_with_message(request, "async_form_get", f"Submission queued. Task ID: {task_id}")
 
 
 @router.get("/submissions", response_class=HTMLResponse)

@@ -12,7 +12,7 @@
 </head>
 <body>
   <h1>Async Submission Form</h1>
-  <p><a href="/">Home</a> | <a href="/submissions">Submissions</a></p>
+  <p><a href="{{ request.url_for('index') }}">Home</a> | <a href="{{ request.url_for('submissions') }}">Submissions</a></p>
 
   {% if message %}
     <ul>
@@ -20,7 +20,7 @@
     </ul>
   {% endif %}
 
-  <form method="post" action="/async-form" novalidate>
+  <form method="post" action="{{ request.url_for('async_form_post') }}" novalidate>
     <label for="first_name">First name</label><br>
     <input id="first_name" name="first_name" type="text" value="{{ form_data.get('first_name', '') }}" required><br><br>
 

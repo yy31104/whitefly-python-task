@@ -3,6 +3,7 @@ FastAPI
 uvicorn
 python-multipart
 SQLAlchemy
+psycopg2-binary
 Jinja2
 celery
 redis

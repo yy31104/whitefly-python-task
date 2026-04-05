@@ -17,5 +17,5 @@ def create_app(config_override: dict | None = None) -> Flask:
 
     from flask_app.app.routes import bp
 
-    app.register_blueprint(bp)
+    app.register_blueprint(bp, url_prefix=app.config.get("FLASK_URL_PREFIX", ""))
     return app
