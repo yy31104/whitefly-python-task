@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FastAPI Sync Form</title>
+  <style>
+    .honeypot { display: none; }
+    .error { color: #b00020; }
+    .success { color: #0f5132; }
+  </style>
+</head>
+<body>
+  <h1>Sync Submission Form</h1>
+  <p><a href="/">Home</a> | <a href="/submissions">Submissions</a></p>
+
+  {% if message %}
+    <ul>
+      <li class="{{ category }}">{{ message }}</li>
+    </ul>
+  {% endif %}
+
+  <form method="post" action="/sync-form" novalidate>
+    <label for="first_name">First name</label><br>
+    <input id="first_name" name="first_name" type="text" value="{{ form_data.get('first_name', '') }}" required><br><br>
+
+    <label for="last_name">Last name</label><br>
+    <input id="last_name" name="last_name" type="text" value="{{ form_data.get('last_name', '') }}" required><br><br>
+
+    <label for="email">Email</label><br>
+    <input id="email" name="email" type="email" value="{{ form_data.get('email', '') }}" required><br><br>
+
+    <div class="honeypot" aria-hidden="true">
+      <label for="honeypot">Leave this field empty</label>
+      <input id="honeypot" name="honeypot" type="text" value="{{ form_data.get('honeypot', '') }}" autocomplete="off" tabindex="-1">
+    </div>
+
+    <button type="submit">Submit</button>
+  </form>
+</body>
+</html>

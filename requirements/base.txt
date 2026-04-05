@@ -1,6 +1,7 @@
 Flask
 FastAPI
 uvicorn
+python-multipart
 SQLAlchemy
 Jinja2
 celery

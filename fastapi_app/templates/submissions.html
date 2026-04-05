@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FastAPI Submissions</title>
+</head>
+<body>
+  <h1>Saved Submissions</h1>
+  <p><a href="/">Home</a> | <a href="/sync-form">Sync form</a> | <a href="/async-form">Async form</a></p>
+
+  {% if message %}
+    <ul>
+      <li class="{{ category }}">{{ message }}</li>
+    </ul>
+  {% endif %}
+
+  {% if submissions %}
+    <table border="1" cellpadding="6">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>First name</th>
+          <th>Last name</th>
+          <th>Email</th>
+          <th>Form type</th>
+          <th>Status</th>
+          <th>Created at</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for submission in submissions %}
+          <tr>
+            <td>{{ submission.id }}</td>
+            <td>{{ submission.first_name }}</td>
+            <td>{{ submission.last_name }}</td>
+            <td>{{ submission.email }}</td>
+            <td>{{ submission.form_type }}</td>
+            <td>{{ submission.status }}</td>
+            <td>{{ submission.created_at }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No submissions yet.</p>
+  {% endif %}
+</body>
+</html>
