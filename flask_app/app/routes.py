@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, url_for
 
 from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
+from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
 from shared.services import create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
@@ -14,12 +15,31 @@ def index():
     return render_template("index.html")
 
 
+def _client_identifier() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
 @bp.route("/sync-form", methods=["GET", "POST"])
 def sync_form():
     if request.method == "POST":
         form_data = extract_sync_form_data(request.form)
         try:
+            enforce_rate_limit(
+                identifier=_client_identifier(),
+                endpoint="flask:sync-form",
+                limit=current_app.config["RATE_LIMIT_POST_REQUESTS"],
+                window_seconds=current_app.config["RATE_LIMIT_WINDOW_SECONDS"],
+                redis_url=current_app.config.get("REDIS_URL"),
+            )
             create_submission_sync(**form_data)
+        except RateLimitExceeded as exc:
+            flash(str(exc), "error")
+            response = make_response(render_template("sync_form.html", form_data=form_data), 429)
+            response.headers["Retry-After"] = str(exc.retry_after)
+            return response
         except ValidationError as exc:
             flash(str(exc), "error")
             return render_template("sync_form.html", form_data=form_data), 400
@@ -35,7 +55,19 @@ def async_form():
     if request.method == "POST":
         form_data = extract_async_form_data(request.form)
         try:
+            enforce_rate_limit(
+                identifier=_client_identifier(),
+                endpoint="flask:async-form",
+                limit=current_app.config["RATE_LIMIT_POST_REQUESTS"],
+                window_seconds=current_app.config["RATE_LIMIT_WINDOW_SECONDS"],
+                redis_url=current_app.config.get("REDIS_URL"),
+            )
             task_id = enqueue_submission_async(**form_data)
+        except RateLimitExceeded as exc:
+            flash(str(exc), "error")
+            response = make_response(render_template("async_form.html", form_data=form_data), 429)
+            response.headers["Retry-After"] = str(exc.retry_after)
+            return response
         except ValidationError as exc:
             flash(str(exc), "error")
             return render_template("async_form.html", form_data=form_data), 400

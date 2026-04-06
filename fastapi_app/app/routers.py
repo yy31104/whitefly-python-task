@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
 from shared.services import create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
@@ -37,6 +38,16 @@ def _context(
         "message": message,
         "category": category,
     }
+
+
+def _client_identifier(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -73,7 +84,23 @@ async def sync_form_post(
     }
 
     try:
+        enforce_rate_limit(
+            identifier=_client_identifier(request),
+            endpoint="fastapi:sync-form",
+            limit=request.app.state.rate_limit_post_requests,
+            window_seconds=request.app.state.rate_limit_window_seconds,
+            redis_url=request.app.state.redis_url,
+        )
         create_submission_sync(**form_data)
+    except RateLimitExceeded as exc:
+        response = templates.TemplateResponse(
+            request=request,
+            name="sync_form.html",
+            context=_context(form_data=form_data, message=str(exc), category="error"),
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
     except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,
@@ -114,7 +141,23 @@ async def async_form_post(
     }
 
     try:
+        enforce_rate_limit(
+            identifier=_client_identifier(request),
+            endpoint="fastapi:async-form",
+            limit=request.app.state.rate_limit_post_requests,
+            window_seconds=request.app.state.rate_limit_window_seconds,
+            redis_url=request.app.state.redis_url,
+        )
         task_id = enqueue_submission_async(**form_data)
+    except RateLimitExceeded as exc:
+        response = templates.TemplateResponse(
+            request=request,
+            name="async_form.html",
+            context=_context(form_data=form_data, message=str(exc), category="error"),
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
     except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,

@@ -14,6 +14,13 @@ def _default_database_url() -> str:
     return f"sqlite:///{(root_dir / 'app.db').as_posix()}"
 
 
+def _read_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
 def create_app(
     database_url: str | None = None,
     url_prefix: str | None = None,
@@ -25,6 +32,9 @@ def create_app(
     init_database(db_url)
     app.state.database_url = db_url
     app.state.url_prefix = prefix
+    app.state.redis_url = os.getenv("REDIS_URL", "")
+    app.state.rate_limit_post_requests = _read_int_env("RATE_LIMIT_POST_REQUESTS", 20)
+    app.state.rate_limit_window_seconds = _read_int_env("RATE_LIMIT_WINDOW_SECONDS", 60)
 
     app.include_router(router, prefix=prefix)
     return app

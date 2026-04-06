@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from fastapi_app.app.main import create_app
 from shared.db import session_scope
 from shared.models import Submission
+from shared.rate_limit import RateLimitExceeded
 
 
 @pytest.fixture
@@ -111,6 +112,56 @@ def test_valid_async_post_queues_task(client: TestClient, monkeypatch: pytest.Mo
             "email": "grace@example.com",
         }
     ]
+    assert _count_submissions() == 0
+
+
+def test_sync_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from fastapi_app.app import routers
+
+    def fake_rate_limit(**kwargs):
+        raise RateLimitExceeded(retry_after=15)
+
+    monkeypatch.setattr(routers, "enforce_rate_limit", fake_rate_limit)
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "honeypot": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 429
+    assert "Too many requests." in response.text
+    assert response.headers["retry-after"] == "15"
+    assert _count_submissions() == 0
+
+
+def test_async_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from fastapi_app.app import routers
+
+    def fake_rate_limit(**kwargs):
+        raise RateLimitExceeded(retry_after=20)
+
+    monkeypatch.setattr(routers, "enforce_rate_limit", fake_rate_limit)
+
+    response = client.post(
+        "/async-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "grace@example.com",
+            "honeypot": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 429
+    assert "Too many requests." in response.text
+    assert response.headers["retry-after"] == "20"
     assert _count_submissions() == 0
 
 

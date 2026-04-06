@@ -82,3 +82,32 @@ docker run --rm --network whitefly-python-task_default -v ${PWD}/load_tests:/scr
 - Better concurrent write behavior than SQLite in multi-container workloads.
 - Closer to production backend architecture.
 - Easier to explain for deployment and scaling discussions.
+
+## Anti-bot protections (M5)
+Current protections for both Flask and FastAPI form flows:
+- Honeypot field check on the server side (`honeypot` must stay empty).
+- Hardened server-side validation:
+  - first/last name length and character checks
+  - email normalization and format checks
+  - disposable email domain rejection (`mailinator`, `10minutemail`, etc.)
+- Rate limiting on `POST /sync-form` and `POST /async-form`:
+  - shared limiter implementation used by both frameworks
+  - Redis-backed counters in containerized setup
+  - in-memory fallback for local environments without Redis
+  - returns HTTP `429` with `Retry-After` header when exceeded
+
+Manual rate-limit test (PowerShell):
+```powershell
+for ($i = 0; $i -lt 25; $i++) {
+  curl.exe -i -X POST "http://localhost:8080/flask/sync-form" `
+    -H "Content-Type: application/x-www-form-urlencoded" `
+    -d "first_name=Ada&last_name=Lovelace&email=ada$i@example.com&honeypot="
+}
+```
+
+### FingerprintJS integration point
+Minimal integration point (not implemented here):
+- Add a hidden `fingerprint_id` field to both sync/async forms.
+- Populate it in frontend using FingerprintJS visitor ID.
+- Include it in server-side payload validation.
+- Use `fingerprint_id` as part of the rate-limit key (e.g., `ip + fingerprint_id`) for better bot differentiation behind shared IPs.
