@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, make_response, redirect, render_template, request, url_for
 
 from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
 from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
@@ -80,5 +80,8 @@ def async_form():
 
 @bp.get("/submissions")
 def submissions():
+    if not current_app.config.get("ENABLE_SUBMISSIONS_PAGE", True):
+        abort(404)
+
     rows = list_submissions()
     return render_template("submissions.html", submissions=rows)

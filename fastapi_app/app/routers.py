@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -175,6 +175,9 @@ async def submissions(
     message: str | None = None,
     category: str = "success",
 ) -> HTMLResponse:
+    if not request.app.state.enable_submissions_page:
+        raise HTTPException(status_code=404, detail="Not Found")
+
     rows = list_submissions()
     context = {
         "submissions": rows,

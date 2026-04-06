@@ -91,6 +91,12 @@ Stop stack:
 docker compose down
 ```
 
+## Production security defaults
+- Set `APP_ENV=production` for production runtime behavior.
+- When `APP_ENV=production`, `SECRET_KEY` must be explicitly provided or app startup fails.
+- In production mode, `/submissions` is disabled by default (`ENABLE_SUBMISSIONS_PAGE=false`) to avoid public PII exposure.
+- You can override this behavior explicitly with `ENABLE_SUBMISSIONS_PAGE=true` if needed behind trusted protection.
+
 ## Load testing (k6)
 Local k6:
 ```powershell

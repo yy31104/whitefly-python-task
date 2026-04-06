@@ -186,3 +186,23 @@ def test_submissions_page_renders(client: TestClient):
     response = client.get("/submissions")
     assert response.status_code == 200
     assert "Saved Submissions" in response.text
+
+
+def test_submissions_page_disabled_in_production(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("SECRET_KEY", "prod-test-secret")
+    monkeypatch.setenv("ENABLE_SUBMISSIONS_PAGE", "false")
+    app = create_app(database_url=f"sqlite:///{(tmp_path / 'prod_disabled_fastapi.db').as_posix()}")
+    client = TestClient(app)
+
+    response = client.get("/submissions")
+    assert response.status_code == 404
+
+
+def test_production_requires_secret_key(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.delenv("ENABLE_SUBMISSIONS_PAGE", raising=False)
+
+    with pytest.raises(RuntimeError, match="SECRET_KEY must be explicitly set"):
+        create_app(database_url=f"sqlite:///{(tmp_path / 'prod_missing_secret_fastapi.db').as_posix()}")

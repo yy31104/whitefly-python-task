@@ -231,3 +231,31 @@ def test_submissions_page_renders(client):
     response = client.get("/submissions")
     assert response.status_code == 200
     assert b"Saved Submissions" in response.data
+
+
+def test_submissions_page_disabled_in_production(tmp_path):
+    db_path = tmp_path / "prod_disabled.db"
+    app = create_app(
+        {
+            "TESTING": True,
+            "APP_ENV": "production",
+            "SECRET_KEY": "prod-test-secret",
+            "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+            "ENABLE_SUBMISSIONS_PAGE": False,
+        }
+    )
+    client = app.test_client()
+    response = client.get("/submissions")
+    assert response.status_code == 404
+
+
+def test_production_requires_secret_key(tmp_path):
+    db_path = tmp_path / "prod_missing_secret.db"
+    with pytest.raises(RuntimeError, match="SECRET_KEY must be explicitly set"):
+        create_app(
+            {
+                "TESTING": True,
+                "APP_ENV": "production",
+                "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+            }
+        )

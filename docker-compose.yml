@@ -29,6 +29,9 @@ services:
       dockerfile: Dockerfile.flask
     container_name: whitefly-flask
     environment:
+      APP_ENV: ${APP_ENV}
+      SECRET_KEY: ${SECRET_KEY}
+      ENABLE_SUBMISSIONS_PAGE: ${ENABLE_SUBMISSIONS_PAGE}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
@@ -48,6 +51,9 @@ services:
       dockerfile: Dockerfile.fastapi
     container_name: whitefly-fastapi
     environment:
+      APP_ENV: ${APP_ENV}
+      SECRET_KEY: ${SECRET_KEY}
+      ENABLE_SUBMISSIONS_PAGE: ${ENABLE_SUBMISSIONS_PAGE}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
