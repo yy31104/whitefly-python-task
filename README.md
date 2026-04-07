@@ -1,58 +1,43 @@
 # whitefly-python-task
 
-Python backend recruitment assignment project for Whitefly.
-
-## Project status
-All milestones are completed.
-
-- M0: project skeleton
-- M1: Flask sync flow
-- M2: Flask async flow with Celery + Redis
-- M3: FastAPI equivalent flow
-- M4: Docker Compose + Nginx + PostgreSQL + k6
-- M5: anti-bot protections (honeypot + validation hardening + rate limiting)
+## Project Overview
+Backend recruitment assignment implemented with Flask and FastAPI parity, shared data/service layers, async processing, reverse proxy routing, load testing, and practical anti-bot protections.
 
 ## Architecture
-- Nginx as a single public entrypoint (`localhost:8080`)
-- Flask app service
-- FastAPI app service
-- Celery worker service
-- Redis (broker/result backend)
-- PostgreSQL (shared database)
+- Public entrypoint: Nginx on `localhost:8080`
+- App services: Flask + FastAPI
+- Async processing: Celery worker
+- Broker: Redis
+- Database: PostgreSQL (Compose runtime), SQLite fallback for local/simple runs
+- Shared domain layer: SQLAlchemy models, validation, service logic
 
-Nginx routing:
-- `http://localhost:8080/flask/...` -> Flask
-- `http://localhost:8080/fastapi/...` -> FastAPI
+Routing behind Nginx:
+- `http://localhost:8080/flask/...` -> Flask service
+- `http://localhost:8080/fastapi/...` -> FastAPI service
 
-## Features implemented
-- Flask sync form: validate and save directly to DB
-- Flask async form: validate and enqueue Celery task
-- FastAPI sync form: validate and save directly to DB
-- FastAPI async form: validate and enqueue Celery task
-- Shared SQLAlchemy model/service/validation layer
-- Shared async worker flow (Redis + Celery)
-- Reverse proxy routing through Nginx
-- Load testing scripts with k6
-- Anti-bot protections for both frameworks
+## Tech Stack
+- Python 3.11
+- Flask, FastAPI, Jinja2
+- SQLAlchemy
+- Celery + Redis
+- PostgreSQL / SQLite
+- Nginx
+- Docker Compose
+- Pytest
+- k6
 
-## Routes
-Flask (through Nginx):
-- `GET /flask/`
-- `GET /flask/sync-form`
-- `POST /flask/sync-form`
-- `GET /flask/async-form`
-- `POST /flask/async-form`
-- `GET /flask/submissions`
+## Features
+- Flask sync form: validate then persist directly.
+- Flask async form: validate then enqueue Celery task.
+- FastAPI sync form: same behavior as Flask sync.
+- FastAPI async form: same behavior as Flask async.
+- Shared service and validation layer used by both frameworks.
+- Shared worker persistence path (`form_type="async"`, `status="processed"`).
+- Shared Redis-backed rate limiter with `429 + Retry-After`.
+- Honeypot and server-side validation hardening.
 
-FastAPI (through Nginx):
-- `GET /fastapi/`
-- `GET /fastapi/sync-form`
-- `POST /fastapi/sync-form`
-- `GET /fastapi/async-form`
-- `POST /fastapi/async-form`
-- `GET /fastapi/submissions`
-
-## Local development (without Docker)
+## Running Locally
+Install dependencies and run tests:
 ```powershell
 .\.venv\Scripts\python -m pip install -r requirements\dev.txt
 .\.venv\Scripts\python -m pytest -q
@@ -68,7 +53,7 @@ Run FastAPI:
 .\.venv\Scripts\python -m uvicorn fastapi_app.app.main:app --reload --port 8000
 ```
 
-## Docker Compose run (recommended)
+## Running with Docker Compose
 ```powershell
 Copy-Item .env.example .env -Force
 docker compose up -d --build
@@ -79,67 +64,76 @@ Main URLs:
 - Flask: `http://localhost:8080/flask/`
 - FastAPI: `http://localhost:8080/fastapi/`
 
-Inspect logs:
+Useful logs:
 ```powershell
 docker compose logs -f
 docker compose logs -f worker
 docker compose logs -f nginx
 ```
 
-Stop stack:
+Stop:
 ```powershell
 docker compose down
 ```
 
-## Production security defaults
-- Set `APP_ENV=production` for production runtime behavior.
-- When `APP_ENV=production`, `SECRET_KEY` must be explicitly provided or app startup fails.
-- In production mode, `/submissions` is disabled by default (`ENABLE_SUBMISSIONS_PAGE=false`) to avoid public PII exposure.
-- You can override this behavior explicitly with `ENABLE_SUBMISSIONS_PAGE=true` if needed behind trusted protection.
+## Testing
+Full suite:
+```powershell
+.\.venv\Scripts\python -m pytest -q
+```
 
-## Load testing (k6)
-Local k6:
+Current test status: `47 passed`
+
+Coverage includes:
+- Flask/FastAPI route behavior (sync/async, validation, rate-limit, security toggles)
+- Worker persistence path
+- Shared validation edge cases
+- Rate-limit fallback behavior
+- Trusted client IP extraction behavior
+
+## Load Testing
+Run locally (if `k6` installed):
 ```powershell
 k6 run load_tests/sync_form.js
 k6 run load_tests/async_form.js
 ```
 
-Docker k6 fallback:
+Docker fallback:
 ```powershell
 docker run --rm --network whitefly-python-task_default -e BASE_URL=http://nginx/flask -v ${PWD}/load_tests:/scripts grafana/k6 run /scripts/sync_form.js
 docker run --rm --network whitefly-python-task_default -e BASE_URL=http://nginx/fastapi -v ${PWD}/load_tests:/scripts grafana/k6 run /scripts/async_form.js
 ```
 
-Sample result summary (local run):
-- sync: 0% failures, p95 ~24ms
-- async: 0% failures, p95 ~9ms
+Latest sample summary:
+- Sync form: 0% failed requests, p95 `24.38ms`
+- Async form: 0% failed requests, p95 `8.76ms`
+- Both scripts met thresholds (`http_req_failed < 5%`, `p(95) < 1000ms`)
+- Async endpoint is faster because it validates and queues work immediately; persistence runs later in the Celery worker.
 
-## Anti-bot protections (M5)
-Implemented protections on both Flask and FastAPI form POST endpoints:
-- Honeypot field validation (`honeypot` must be empty)
-- Hardened server-side validation:
-  - name length and character restrictions
-  - email format and length checks
-  - disposable email domain blocking
-- Rate limiting:
-  - applied to `POST /sync-form` and `POST /async-form`
-  - shared limiter for both frameworks
-  - Redis-backed in containerized mode
-  - in-memory fallback if Redis is unavailable
-  - returns HTTP `429` with `Retry-After`
+## Security and Reliability Improvements
+- Production secret handling:
+  - `APP_ENV=production` requires explicit `SECRET_KEY`; startup fails fast if missing.
+- Production submissions-page restriction:
+  - `/submissions` is disabled by default in production (`ENABLE_SUBMISSIONS_PAGE=false`).
+- Async broker failure behavior:
+  - queue publish failures are converted to controlled `503` responses with user-friendly feedback (not generic `500`).
+- Trusted proxy / client IP handling:
+  - Nginx forwards normalized client IP headers.
+  - App layer prefers `X-Real-IP` and uses a shared trusted-identifier helper for rate limiting.
+- Redis-backed rate limiting with memory fallback:
+  - primary storage is Redis.
+  - if Redis is unavailable, limiter falls back to in-memory buckets and logs explicit warnings.
+- Additional production-quality safeguards:
+  - `pool_pre_ping=True` for non-SQLite database engines.
+  - submissions list queries are bounded via configurable `SUBMISSIONS_PAGE_LIMIT` (default `200`).
+  - honeypot is validated before deeper field validation.
 
-Manual rate-limit test:
-```powershell
-for ($i = 0; $i -lt 25; $i++) {
-  curl.exe -i -X POST "http://localhost:8080/flask/sync-form" `
-    -H "Content-Type: application/x-www-form-urlencoded" `
-    -d "first_name=Ada&last_name=Lovelace&email=ada$i@example.com&honeypot="
-}
-```
-
-## FingerprintJS integration point
-Not implemented by design (to keep M5 minimal), but can be plugged in as follows:
-- add hidden field `fingerprint_id` in both form templates
-- populate it client-side with FingerprintJS visitor ID
-- validate/store it server-side
-- include it in rate-limit key (`ip + fingerprint_id`) for better bot differentiation
+## Future Improvements
+- Database migrations:
+  - introduce Alembic-based schema migration workflow.
+- Stronger admin/auth protection:
+  - protect internal pages (such as submissions) with robust authentication/authorization.
+- Richer async lifecycle:
+  - model and expose `queued -> processing -> processed/failed` job status transitions.
+- Fingerprint-based anti-bot expansion:
+  - add fingerprint signal (for example FingerprintJS) to complement IP-based controls.
