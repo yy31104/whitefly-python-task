@@ -244,6 +244,26 @@ def test_submissions_page_renders(client: TestClient):
     assert "Saved Submissions" in response.text
 
 
+def test_submissions_page_uses_configured_limit(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    app = create_app(database_url=f"sqlite:///{(tmp_path / 'fastapi_submissions_limit.db').as_posix()}")
+    app.state.submissions_page_limit = 7
+    client = TestClient(app)
+
+    from fastapi_app.app import routers
+
+    captured: dict[str, int] = {}
+
+    def fake_list_submissions(*, limit: int):
+        captured["limit"] = limit
+        return []
+
+    monkeypatch.setattr(routers, "list_submissions", fake_list_submissions)
+
+    response = client.get("/submissions")
+    assert response.status_code == 200
+    assert captured["limit"] == 7
+
+
 def test_submissions_page_disabled_in_production(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "prod-test-secret")

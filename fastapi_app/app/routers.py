@@ -183,7 +183,7 @@ async def submissions(
     if not request.app.state.enable_submissions_page:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    rows = list_submissions()
+    rows = list_submissions(limit=request.app.state.submissions_page_limit)
     context = {
         "submissions": rows,
         "message": message,

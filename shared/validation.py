@@ -61,10 +61,10 @@ def validate_honeypot(value: str | None) -> None:
 
 
 def validate_submission_payload(payload: Mapping[str, Any]) -> dict[str, str]:
+    validate_honeypot(payload.get("honeypot"))
     first_name = validate_name(payload.get("first_name"), "First name")
     last_name = validate_name(payload.get("last_name"), "Last name")
     email = validate_email_address(payload.get("email"))
-    validate_honeypot(payload.get("honeypot"))
     return {
         "first_name": first_name,
         "last_name": last_name,

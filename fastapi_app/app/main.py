@@ -50,6 +50,7 @@ def create_app(
         default=app_env != "production",
     )
     app.state.redis_url = os.getenv("REDIS_URL", "")
+    app.state.submissions_page_limit = _read_int_env("SUBMISSIONS_PAGE_LIMIT", 200)
     app.state.rate_limit_post_requests = _read_int_env("RATE_LIMIT_POST_REQUESTS", 20)
     app.state.rate_limit_window_seconds = _read_int_env("RATE_LIMIT_WINDOW_SECONDS", 60)
 

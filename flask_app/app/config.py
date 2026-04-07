@@ -27,6 +27,7 @@ class Config:
         os.getenv("ENABLE_SUBMISSIONS_PAGE"),
         default=APP_ENV != "production",
     )
+    SUBMISSIONS_PAGE_LIMIT = int(os.getenv("SUBMISSIONS_PAGE_LIMIT", "200"))
     RATE_LIMIT_POST_REQUESTS = int(os.getenv("RATE_LIMIT_POST_REQUESTS", "20"))
     RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     TESTING = False

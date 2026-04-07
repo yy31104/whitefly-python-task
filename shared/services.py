@@ -13,6 +13,9 @@ class QueueUnavailable(RuntimeError):
     """Raised when the async queue is temporarily unavailable."""
 
 
+DEFAULT_SUBMISSIONS_LIMIT = 200
+
+
 def validate_submission_data(
     first_name: str,
     last_name: str,
@@ -93,6 +96,12 @@ def save_submission_from_worker(
     return _persist_submission(validated, form_type=form_type, status=status)
 
 
-def list_submissions() -> Sequence[Submission]:
+def list_submissions(limit: int | None = DEFAULT_SUBMISSIONS_LIMIT) -> Sequence[Submission]:
+    resolved_limit = DEFAULT_SUBMISSIONS_LIMIT if limit is None else max(1, int(limit))
     with session_scope() as session:
-        return session.query(Submission).order_by(Submission.created_at.desc()).all()
+        return (
+            session.query(Submission)
+            .order_by(Submission.created_at.desc())
+            .limit(resolved_limit)
+            .all()
+        )

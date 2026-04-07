@@ -87,5 +87,5 @@ def submissions():
     if not current_app.config.get("ENABLE_SUBMISSIONS_PAGE", True):
         abort(404)
 
-    rows = list_submissions()
+    rows = list_submissions(limit=current_app.config.get("SUBMISSIONS_PAGE_LIMIT", 200))
     return render_template("submissions.html", submissions=rows)

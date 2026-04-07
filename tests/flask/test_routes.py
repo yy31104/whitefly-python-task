@@ -289,6 +289,33 @@ def test_submissions_page_renders(client):
     assert b"Saved Submissions" in response.data
 
 
+def test_submissions_page_uses_configured_limit(tmp_path, monkeypatch):
+    db_path = tmp_path / "submissions_limit.db"
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret",
+            "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+            "SUBMISSIONS_PAGE_LIMIT": 7,
+        }
+    )
+    client = app.test_client()
+
+    from flask_app.app import routes
+
+    captured: dict[str, int] = {}
+
+    def fake_list_submissions(*, limit: int):
+        captured["limit"] = limit
+        return []
+
+    monkeypatch.setattr(routes, "list_submissions", fake_list_submissions)
+
+    response = client.get("/submissions")
+    assert response.status_code == 200
+    assert captured["limit"] == 7
+
+
 def test_submissions_page_disabled_in_production(tmp_path):
     db_path = tmp_path / "prod_disabled.db"
     app = create_app(
