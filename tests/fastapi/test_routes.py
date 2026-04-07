@@ -7,6 +7,7 @@ from fastapi_app.app.main import create_app
 from shared.db import session_scope
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
+from shared.services import QueueUnavailable
 
 
 @pytest.fixture
@@ -112,6 +113,30 @@ def test_valid_async_post_queues_task(client: TestClient, monkeypatch: pytest.Mo
             "email": "grace@example.com",
         }
     ]
+    assert _count_submissions() == 0
+
+
+def test_async_post_queue_unavailable_returns_503(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from fastapi_app.app import routers
+
+    def fake_enqueue_submission_async(**kwargs):
+        raise QueueUnavailable("Queue is temporarily unavailable. Please try again shortly.")
+
+    monkeypatch.setattr(routers, "enqueue_submission_async", fake_enqueue_submission_async)
+
+    response = client.post(
+        "/async-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "grace@example.com",
+            "honeypot": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "Queue is temporarily unavailable. Please try again shortly." in response.text
     assert _count_submissions() == 0
 
 

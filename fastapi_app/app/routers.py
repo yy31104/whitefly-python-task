@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
-from shared.services import create_submission_sync, enqueue_submission_async, list_submissions
+from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
 
@@ -158,6 +158,13 @@ async def async_form_post(
         )
         response.headers["Retry-After"] = str(exc.retry_after)
         return response
+    except QueueUnavailable as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="async_form.html",
+            context=_context(form_data=form_data, message=str(exc), category="error"),
+            status_code=503,
+        )
     except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,

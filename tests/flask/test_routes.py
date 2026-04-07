@@ -6,6 +6,7 @@ from flask_app.app import create_app
 from shared.db import session_scope
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
+from shared.services import QueueUnavailable
 
 
 @pytest.fixture
@@ -106,6 +107,30 @@ def test_valid_async_post_queues_task(client, monkeypatch):
             "email": "grace@example.com",
         }
     ]
+    assert _count_submissions() == 0
+
+
+def test_async_post_queue_unavailable_returns_503(client, monkeypatch):
+    from flask_app.app import routes
+
+    def fake_enqueue_submission_async(**kwargs):
+        raise QueueUnavailable("Queue is temporarily unavailable. Please try again shortly.")
+
+    monkeypatch.setattr(routes, "enqueue_submission_async", fake_enqueue_submission_async)
+
+    response = client.post(
+        "/async-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "grace@example.com",
+            "honeypot": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert b"Queue is temporarily unavailable. Please try again shortly." in response.data
     assert _count_submissions() == 0
 
 

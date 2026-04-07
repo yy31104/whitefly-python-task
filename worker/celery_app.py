@@ -18,4 +18,12 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    task_publish_retry=True,
+    task_publish_retry_policy={
+        "max_retries": 3,
+        "interval_start": 0,
+        "interval_step": 0.5,
+        "interval_max": 2,
+    },
+    task_ignore_result=True,
 )

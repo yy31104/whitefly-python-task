@@ -4,7 +4,7 @@ from flask import Blueprint, abort, current_app, flash, make_response, redirect,
 
 from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
 from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
-from shared.services import create_submission_sync, enqueue_submission_async, list_submissions
+from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
 bp = Blueprint("main", __name__)
@@ -68,6 +68,9 @@ def async_form():
             response = make_response(render_template("async_form.html", form_data=form_data), 429)
             response.headers["Retry-After"] = str(exc.retry_after)
             return response
+        except QueueUnavailable as exc:
+            flash(str(exc), "error")
+            return render_template("async_form.html", form_data=form_data), 503
         except ValidationError as exc:
             flash(str(exc), "error")
             return render_template("async_form.html", form_data=form_data), 400
