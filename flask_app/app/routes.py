@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, abort, current_app, flash, make_response, redirect, render_template, request, url_for
 
 from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
-from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
+from shared.rate_limit import RateLimitExceeded, enforce_rate_limit, trusted_client_identifier
 from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
@@ -16,10 +16,11 @@ def index():
 
 
 def _client_identifier() -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.remote_addr or "unknown"
+    return trusted_client_identifier(
+        x_real_ip=request.headers.get("X-Real-IP"),
+        x_forwarded_for=request.headers.get("X-Forwarded-For"),
+        remote_addr=request.remote_addr,
+    )
 
 
 @bp.route("/sync-form", methods=["GET", "POST"])

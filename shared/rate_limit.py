@@ -21,6 +21,29 @@ class RateLimitExceeded(Exception):
         super().__init__(f"Too many requests. Please retry in {self.retry_after} seconds.")
 
 
+def trusted_client_identifier(
+    *,
+    x_real_ip: str | None = None,
+    x_forwarded_for: str | None = None,
+    remote_addr: str | None = None,
+) -> str:
+    real_ip = (x_real_ip or "").strip()
+    if real_ip:
+        return real_ip
+
+    forwarded = (x_forwarded_for or "").strip()
+    if forwarded:
+        first_hop = forwarded.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+
+    direct = (remote_addr or "").strip()
+    if direct:
+        return direct
+
+    return "unknown"
+
+
 def _resolve_redis_url(redis_url: str | None) -> str:
     return (redis_url or os.getenv("REDIS_URL", "")).strip()
 

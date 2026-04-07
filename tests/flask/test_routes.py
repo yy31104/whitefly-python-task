@@ -159,6 +159,37 @@ def test_sync_form_rate_limit_returns_429(client, monkeypatch):
     assert _count_submissions() == 0
 
 
+def test_rate_limit_prefers_x_real_ip(client, monkeypatch):
+    from flask_app.app import routes
+
+    captured: dict[str, str] = {}
+
+    def fake_rate_limit(**kwargs):
+        captured.update(kwargs)
+        raise RateLimitExceeded(retry_after=5)
+
+    monkeypatch.setattr(routes, "enforce_rate_limit", fake_rate_limit)
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "honeypot": "",
+        },
+        headers={
+            "X-Real-IP": "203.0.113.10",
+            "X-Forwarded-For": "198.51.100.1, 198.51.100.2",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 429
+    assert captured["identifier"] == "203.0.113.10"
+    assert _count_submissions() == 0
+
+
 def test_async_form_rate_limit_returns_429(client, monkeypatch):
     from flask_app.app import routes
 

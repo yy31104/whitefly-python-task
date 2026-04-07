@@ -165,6 +165,37 @@ def test_sync_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytes
     assert _count_submissions() == 0
 
 
+def test_rate_limit_prefers_x_real_ip(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from fastapi_app.app import routers
+
+    captured: dict[str, str] = {}
+
+    def fake_rate_limit(**kwargs):
+        captured.update(kwargs)
+        raise RateLimitExceeded(retry_after=5)
+
+    monkeypatch.setattr(routers, "enforce_rate_limit", fake_rate_limit)
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "honeypot": "",
+        },
+        headers={
+            "x-real-ip": "203.0.113.10",
+            "x-forwarded-for": "198.51.100.1, 198.51.100.2",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 429
+    assert captured["identifier"] == "203.0.113.10"
+    assert _count_submissions() == 0
+
+
 def test_async_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     from fastapi_app.app import routers
 

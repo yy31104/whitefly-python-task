@@ -7,7 +7,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from shared.rate_limit import RateLimitExceeded, enforce_rate_limit
+from shared.rate_limit import RateLimitExceeded, enforce_rate_limit, trusted_client_identifier
 from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
 from shared.validation import ValidationError
 
@@ -41,13 +41,11 @@ def _context(
 
 
 def _client_identifier(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
+    return trusted_client_identifier(
+        x_real_ip=request.headers.get("x-real-ip"),
+        x_forwarded_for=request.headers.get("x-forwarded-for"),
+        remote_addr=request.client.host if request.client else None,
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
