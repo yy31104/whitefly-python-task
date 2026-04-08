@@ -43,7 +43,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz').read()\"",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/flask/healthz').read()\"",
         ]
       interval: 10s
       timeout: 3s
@@ -75,7 +75,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()\"",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/fastapi/healthz').read()\"",
         ]
       interval: 10s
       timeout: 3s
