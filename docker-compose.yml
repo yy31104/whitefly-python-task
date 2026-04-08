@@ -39,6 +39,16 @@ services:
       RATE_LIMIT_POST_REQUESTS: ${RATE_LIMIT_POST_REQUESTS}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS}
       FLASK_URL_PREFIX: /flask
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz').read()\"",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +71,16 @@ services:
       RATE_LIMIT_POST_REQUESTS: ${RATE_LIMIT_POST_REQUESTS}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS}
       FASTAPI_URL_PREFIX: /fastapi
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()\"",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       postgres:
         condition: service_healthy

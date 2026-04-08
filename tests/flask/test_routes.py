@@ -38,6 +38,14 @@ def test_home_page(client):
     assert b"Hello World" in response.data
 
 
+def test_healthz_returns_ok_json(client):
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert "application/json" in response.content_type
+    assert response.get_json() == {"status": "ok"}
+    assert '{"status":"ok"}' in response.get_data(as_text=True).replace(" ", "")
+
+
 def test_sync_form_get(client):
     response = client.get("/sync-form")
     assert response.status_code == 200

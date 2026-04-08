@@ -53,6 +53,11 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="index.html")
 
 
+@router.get("/healthz")
+async def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @router.get("/sync-form", response_class=HTMLResponse)
 async def sync_form_get(
     request: Request,

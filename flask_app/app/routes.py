@@ -15,6 +15,11 @@ def index():
     return render_template("index.html")
 
 
+@bp.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
 def _client_identifier() -> str:
     return trusted_client_identifier(
         x_real_ip=request.headers.get("X-Real-IP"),
