@@ -71,6 +71,19 @@ docker compose logs -f worker
 docker compose logs -f nginx
 ```
 
+Health check status (explicit container names used in this project):
+```powershell
+docker inspect --format "{{json .State.Health.Status}}" whitefly-flask
+docker inspect --format "{{json .State.Health.Status}}" whitefly-fastapi
+```
+
+Portable alternative (resolve IDs first):
+```powershell
+docker compose ps
+docker inspect --format "{{json .State.Health.Status}}" (docker compose ps -q flask_app)
+docker inspect --format "{{json .State.Health.Status}}" (docker compose ps -q fastapi_app)
+```
+
 Stop:
 ```powershell
 docker compose down
@@ -82,7 +95,7 @@ Full suite:
 .\.venv\Scripts\python -m pytest -q
 ```
 
-Current test status: `47 passed`
+Current test status: `49 passed`
 
 Coverage includes:
 - Flask/FastAPI route behavior (sync/async, validation, rate-limit, security toggles)
