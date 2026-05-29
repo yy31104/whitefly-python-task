@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 
 from fastapi_app.app.routers import router
 from shared.db import init_database
@@ -70,6 +71,7 @@ def create_app(
     app.state.rate_limit_window_seconds = _read_int_env("RATE_LIMIT_WINDOW_SECONDS", 60)
 
     _register_request_observability(app)
+    _register_error_observability(app)
     app.include_router(router, prefix=prefix)
     return app
 
@@ -79,6 +81,7 @@ def _register_request_observability(app: FastAPI) -> None:
     async def request_id_middleware(request: Request, call_next):
         request_id = resolve_request_id(request.headers.get("x-request-id"))
         set_request_id(request_id)
+        request.state.request_id = request_id
         started_at = time.perf_counter()
         is_form_post = _is_form_post_request(request)
 
@@ -126,6 +129,21 @@ def _register_request_observability(app: FastAPI) -> None:
             return response
         finally:
             clear_request_id()
+
+
+def _register_error_observability(app: FastAPI) -> None:
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        request: Request, _exception: Exception
+    ) -> PlainTextResponse:
+        request_id = getattr(request.state, "request_id", None) or resolve_request_id(
+            None
+        )
+        return PlainTextResponse(
+            "Internal Server Error",
+            status_code=500,
+            headers={"X-Request-ID": request_id},
+        )
 
 
 def _is_form_post_request(request: Request) -> bool:
