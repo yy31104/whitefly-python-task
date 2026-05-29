@@ -4,7 +4,6 @@ from celery import Celery
 
 from flask_app.app.config import Config
 
-
 celery_app = Celery(
     "whitefly_worker",
     broker=Config.CELERY_BROKER_URL,

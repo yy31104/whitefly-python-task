@@ -71,6 +71,17 @@ docker compose logs -f worker
 docker compose logs -f nginx
 ```
 
+## Request IDs and Logs
+Flask, FastAPI, nginx, and the Celery worker write JSON logs with a `request_id` field. The apps echo `X-Request-ID` on every response; if a caller omits it, the edge/app generates one.
+
+Example trace with a caller-supplied ID:
+```powershell
+curl.exe -i -H "X-Request-ID: demo-trace-001" -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" http://localhost:8080/flask/async-form
+docker compose logs nginx flask_app worker | Select-String demo-trace-001
+```
+
+For requests without `X-Request-ID`, nginx stamps one; copy the response header value and search the nginx, app, and worker logs for that ID.
+
 Health check status (explicit container names used in this project):
 ```powershell
 docker inspect --format "{{json .State.Health.Status}}" whitefly-flask

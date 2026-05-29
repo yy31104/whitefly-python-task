@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+import uuid
+
 import pytest
 
 from flask_app.app import create_app
 from shared.db import session_scope
+from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
 from shared.services import QueueUnavailable
@@ -46,6 +50,54 @@ def test_healthz_returns_ok_json(client):
     assert '{"status":"ok"}' in response.get_data(as_text=True).replace(" ", "")
 
 
+def test_response_includes_generated_request_id(client):
+    response = client.get("/healthz")
+
+    request_id = response.headers["X-Request-ID"]
+    assert uuid.UUID(request_id)
+
+
+def test_client_supplied_request_id_is_echoed(client):
+    response = client.get(
+        "/healthz", headers={"X-Request-ID": "flask-client-request-id"}
+    )
+
+    assert response.headers["X-Request-ID"] == "flask-client-request-id"
+
+
+def test_malicious_request_id_is_replaced_and_not_logged(client, caplog):
+    caplog.set_level(logging.INFO)
+    malicious_request_id = "evil request SECRET_KEY"
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "NoLogFirst",
+            "last_name": "NoLogLast",
+            "email": "nolog-malicious-flask@example.com",
+            "honeypot": "",
+        },
+        headers={"X-Request-ID": malicious_request_id},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    safe_request_id = response.headers["X-Request-ID"]
+    assert safe_request_id != malicious_request_id
+    assert uuid.UUID(safe_request_id)
+
+    records = [record for record in caplog.records if record.name == "flask_app.app"]
+    assert records
+    assert all(record.request_id == safe_request_id for record in records)
+
+    rendered_logs = "\n".join(str(record.__dict__) for record in records)
+    assert malicious_request_id not in rendered_logs
+    assert "nolog-malicious-flask@example.com" not in rendered_logs
+    assert "NoLogFirst" not in rendered_logs
+    assert "NoLogLast" not in rendered_logs
+    assert "SECRET_KEY" not in rendered_logs
+
+
 def test_sync_form_get(client):
     response = client.get("/sync-form")
     assert response.status_code == 200
@@ -81,12 +133,15 @@ def test_valid_async_post_queues_task(client, monkeypatch):
     class DummyTaskResult:
         id = "task-123"
 
-    def fake_delay(*, first_name: str, last_name: str, email: str):
+    def fake_delay(
+        *, first_name: str, last_name: str, email: str, request_id: str | None = None
+    ):
         calls.append(
             {
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
+                "request_id": request_id,
             }
         )
         return DummyTaskResult()
@@ -103,6 +158,7 @@ def test_valid_async_post_queues_task(client, monkeypatch):
             "email": "grace@example.com",
             "honeypot": "",
         },
+        headers={"X-Request-ID": "flask-async-request-id"},
         follow_redirects=True,
     )
 
@@ -113,18 +169,51 @@ def test_valid_async_post_queues_task(client, monkeypatch):
             "first_name": "Grace",
             "last_name": "Hopper",
             "email": "grace@example.com",
+            "request_id": "flask-async-request-id",
         }
     ]
     assert _count_submissions() == 0
+
+
+def test_form_post_logs_request_id_without_raw_pii(client, caplog):
+    caplog.set_level(logging.INFO)
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "NoLogFirst",
+            "last_name": "NoLogLast",
+            "email": "nolog-flask@example.com",
+            "honeypot": "",
+        },
+        headers={"X-Request-ID": "flask-log-request-id"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    records = [record for record in caplog.records if record.name == "flask_app.app"]
+    assert [record.event for record in records] == ["form_post_start", "form_post_end"]
+    assert all(record.request_id == "flask-log-request-id" for record in records)
+
+    rendered_logs = "\n".join(str(record.__dict__) for record in records)
+    assert "nolog-flask@example.com" not in rendered_logs
+    assert "NoLogFirst" not in rendered_logs
+    assert "NoLogLast" not in rendered_logs
+    assert "test-secret" not in rendered_logs
+    assert "SECRET_KEY" not in rendered_logs
 
 
 def test_async_post_queue_unavailable_returns_503(client, monkeypatch):
     from flask_app.app import routes
 
     def fake_enqueue_submission_async(**kwargs):
-        raise QueueUnavailable("Queue is temporarily unavailable. Please try again shortly.")
+        raise QueueUnavailable(
+            "Queue is temporarily unavailable. Please try again shortly."
+        )
 
-    monkeypatch.setattr(routes, "enqueue_submission_async", fake_enqueue_submission_async)
+    monkeypatch.setattr(
+        routes, "enqueue_submission_async", fake_enqueue_submission_async
+    )
 
     response = client.post(
         "/async-form",
@@ -138,7 +227,9 @@ def test_async_post_queue_unavailable_returns_503(client, monkeypatch):
     )
 
     assert response.status_code == 503
-    assert b"Queue is temporarily unavailable. Please try again shortly." in response.data
+    assert (
+        b"Queue is temporarily unavailable. Please try again shortly." in response.data
+    )
     assert _count_submissions() == 0
 
 
@@ -350,3 +441,27 @@ def test_production_requires_secret_key(tmp_path):
                 "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
             }
         )
+
+
+def test_request_id_context_clears_after_error(tmp_path):
+    db_path = tmp_path / "flask_error_cleanup.db"
+    app = create_app(
+        {
+            "TESTING": False,
+            "PROPAGATE_EXCEPTIONS": False,
+            "SECRET_KEY": "test-secret",
+            "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+        }
+    )
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("boom")
+
+    response = app.test_client().get(
+        "/boom", headers={"X-Request-ID": "flask-error-request-id"}
+    )
+
+    assert response.status_code == 500
+    assert response.headers["X-Request-ID"] == "flask-error-request-id"
+    assert get_request_id() is None

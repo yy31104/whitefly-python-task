@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -39,6 +42,58 @@ def test_healthz_returns_ok_json(client: TestClient):
     assert "application/json" in response.headers["content-type"]
     assert response.json() == {"status": "ok"}
     assert '{"status":"ok"}' in response.text.replace(" ", "")
+
+
+def test_response_includes_generated_request_id(client: TestClient):
+    response = client.get("/healthz")
+
+    request_id = response.headers["X-Request-ID"]
+    assert uuid.UUID(request_id)
+
+
+def test_client_supplied_request_id_is_echoed(client: TestClient):
+    response = client.get(
+        "/healthz", headers={"X-Request-ID": "fastapi-client-request-id"}
+    )
+
+    assert response.headers["X-Request-ID"] == "fastapi-client-request-id"
+
+
+def test_malicious_request_id_is_replaced_and_not_logged(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.INFO)
+    malicious_request_id = "evil request SECRET_KEY"
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "NoLogFirst",
+            "last_name": "NoLogLast",
+            "email": "nolog-malicious-fastapi@example.com",
+            "honeypot": "",
+        },
+        headers={"X-Request-ID": malicious_request_id},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    safe_request_id = response.headers["X-Request-ID"]
+    assert safe_request_id != malicious_request_id
+    assert uuid.UUID(safe_request_id)
+
+    records = [
+        record for record in caplog.records if record.name == "fastapi_app.app.main"
+    ]
+    assert records
+    assert all(record.request_id == safe_request_id for record in records)
+
+    rendered_logs = "\n".join(str(record.__dict__) for record in records)
+    assert malicious_request_id not in rendered_logs
+    assert "nolog-malicious-fastapi@example.com" not in rendered_logs
+    assert "NoLogFirst" not in rendered_logs
+    assert "NoLogLast" not in rendered_logs
+    assert "SECRET_KEY" not in rendered_logs
 
 
 def test_sync_form_get(client: TestClient):
@@ -87,14 +142,25 @@ def test_invalid_sync_post_shows_error(client: TestClient):
     assert _count_submissions() == 0
 
 
-def test_valid_async_post_queues_task(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_valid_async_post_queues_task(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
     calls: list[dict[str, str]] = []
 
     class DummyTaskResult:
         id = "task-fastapi-123"
 
-    def fake_delay(*, first_name: str, last_name: str, email: str):
-        calls.append({"first_name": first_name, "last_name": last_name, "email": email})
+    def fake_delay(
+        *, first_name: str, last_name: str, email: str, request_id: str | None = None
+    ):
+        calls.append(
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "request_id": request_id,
+            }
+        )
         return DummyTaskResult()
 
     from worker.tasks import save_async_submission_task
@@ -109,6 +175,7 @@ def test_valid_async_post_queues_task(client: TestClient, monkeypatch: pytest.Mo
             "email": "grace@example.com",
             "honeypot": "",
         },
+        headers={"X-Request-ID": "fastapi-async-request-id"},
         follow_redirects=True,
     )
 
@@ -119,18 +186,85 @@ def test_valid_async_post_queues_task(client: TestClient, monkeypatch: pytest.Mo
             "first_name": "Grace",
             "last_name": "Hopper",
             "email": "grace@example.com",
+            "request_id": "fastapi-async-request-id",
         }
     ]
     assert _count_submissions() == 0
 
 
-def test_async_post_queue_unavailable_returns_503(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_form_post_logs_request_id_without_raw_pii(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.INFO)
+
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "NoLogFirst",
+            "last_name": "NoLogLast",
+            "email": "nolog-fastapi@example.com",
+            "honeypot": "",
+        },
+        headers={"X-Request-ID": "fastapi-log-request-id"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    records = [
+        record for record in caplog.records if record.name == "fastapi_app.app.main"
+    ]
+    assert [record.event for record in records] == ["form_post_start", "form_post_end"]
+    assert all(record.request_id == "fastapi-log-request-id" for record in records)
+
+    rendered_logs = "\n".join(str(record.__dict__) for record in records)
+    assert "nolog-fastapi@example.com" not in rendered_logs
+    assert "NoLogFirst" not in rendered_logs
+    assert "NoLogLast" not in rendered_logs
+    assert "SECRET_KEY" not in rendered_logs
+
+
+def test_prefixed_form_post_logs_request_id(tmp_path, caplog: pytest.LogCaptureFixture):
+    caplog.set_level(logging.INFO)
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_prefixed_logging.db').as_posix()}",
+        url_prefix="/fastapi",
+    )
+
+    with TestClient(app) as prefixed_client:
+        response = prefixed_client.post(
+            "/fastapi/sync-form",
+            data={
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "email": "ada-prefixed@example.com",
+                "honeypot": "",
+            },
+            headers={"X-Request-ID": "fastapi-prefix-request-id"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    records = [
+        record for record in caplog.records if record.name == "fastapi_app.app.main"
+    ]
+    assert [record.event for record in records] == ["form_post_start", "form_post_end"]
+    assert all(record.request_id == "fastapi-prefix-request-id" for record in records)
+    assert all(record.path == "/fastapi/sync-form" for record in records)
+
+
+def test_async_post_queue_unavailable_returns_503(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
     from fastapi_app.app import routers
 
     def fake_enqueue_submission_async(**kwargs):
-        raise QueueUnavailable("Queue is temporarily unavailable. Please try again shortly.")
+        raise QueueUnavailable(
+            "Queue is temporarily unavailable. Please try again shortly."
+        )
 
-    monkeypatch.setattr(routers, "enqueue_submission_async", fake_enqueue_submission_async)
+    monkeypatch.setattr(
+        routers, "enqueue_submission_async", fake_enqueue_submission_async
+    )
 
     response = client.post(
         "/async-form",
@@ -144,11 +278,15 @@ def test_async_post_queue_unavailable_returns_503(client: TestClient, monkeypatc
     )
 
     assert response.status_code == 503
-    assert "Queue is temporarily unavailable. Please try again shortly." in response.text
+    assert (
+        "Queue is temporarily unavailable. Please try again shortly." in response.text
+    )
     assert _count_submissions() == 0
 
 
-def test_sync_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_sync_form_rate_limit_returns_429(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
     from fastapi_app.app import routers
 
     def fake_rate_limit(**kwargs):
@@ -173,7 +311,9 @@ def test_sync_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytes
     assert _count_submissions() == 0
 
 
-def test_rate_limit_prefers_x_real_ip(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_rate_limit_prefers_x_real_ip(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
     from fastapi_app.app import routers
 
     captured: dict[str, str] = {}
@@ -204,7 +344,9 @@ def test_rate_limit_prefers_x_real_ip(client: TestClient, monkeypatch: pytest.Mo
     assert _count_submissions() == 0
 
 
-def test_async_form_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_async_form_rate_limit_returns_429(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
     from fastapi_app.app import routers
 
     def fake_rate_limit(**kwargs):
@@ -252,8 +394,12 @@ def test_submissions_page_renders(client: TestClient):
     assert "Saved Submissions" in response.text
 
 
-def test_submissions_page_uses_configured_limit(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    app = create_app(database_url=f"sqlite:///{(tmp_path / 'fastapi_submissions_limit.db').as_posix()}")
+def test_submissions_page_uses_configured_limit(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_submissions_limit.db').as_posix()}"
+    )
     app.state.submissions_page_limit = 7
     client = TestClient(app)
 
@@ -272,11 +418,15 @@ def test_submissions_page_uses_configured_limit(tmp_path, monkeypatch: pytest.Mo
     assert captured["limit"] == 7
 
 
-def test_submissions_page_disabled_in_production(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_submissions_page_disabled_in_production(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "prod-test-secret")
     monkeypatch.setenv("ENABLE_SUBMISSIONS_PAGE", "false")
-    app = create_app(database_url=f"sqlite:///{(tmp_path / 'prod_disabled_fastapi.db').as_posix()}")
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'prod_disabled_fastapi.db').as_posix()}"
+    )
     client = TestClient(app)
 
     response = client.get("/submissions")
@@ -289,4 +439,6 @@ def test_production_requires_secret_key(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.delenv("ENABLE_SUBMISSIONS_PAGE", raising=False)
 
     with pytest.raises(RuntimeError, match="SECRET_KEY must be explicitly set"):
-        create_app(database_url=f"sqlite:///{(tmp_path / 'prod_missing_secret_fastapi.db').as_posix()}")
+        create_app(
+            database_url=f"sqlite:///{(tmp_path / 'prod_missing_secret_fastapi.db').as_posix()}"
+        )
