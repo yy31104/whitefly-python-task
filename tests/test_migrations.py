@@ -17,14 +17,12 @@ def _alembic_config() -> Config:
     return Config(str(root_dir / "alembic.ini"))
 
 
-def _column_names(engine) -> set[str]:
-    return {column["name"] for column in inspect(engine).get_columns("submissions")}
+def _column_names(engine, table_name: str = "submissions") -> set[str]:
+    return {column["name"] for column in inspect(engine).get_columns(table_name)}
 
 
-def _indexes(engine) -> dict[str, dict]:
-    return {
-        index["name"]: index for index in inspect(engine).get_indexes("submissions")
-    }
+def _indexes(engine, table_name: str = "submissions") -> dict[str, dict]:
+    return {index["name"]: index for index in inspect(engine).get_indexes(table_name)}
 
 
 def _insert_submission(
@@ -173,6 +171,80 @@ def test_create_all_schema_matches_alembic_head_for_idempotency_key(
             alembic_index["column_names"]
             == create_all_index["column_names"]
             == ["idempotency_key"]
+        )
+        assert alembic_index["unique"]
+        assert create_all_index["unique"]
+    finally:
+        alembic_engine.dispose()
+        create_all_engine.dispose()
+
+
+def test_alembic_task_status_schema_sqlite(monkeypatch, tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'task_status_migration.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+
+    alembic_config = _alembic_config()
+    engine = create_engine(database_url)
+
+    try:
+        command.upgrade(alembic_config, "head")
+
+        inspector = inspect(engine)
+        assert inspector.has_table("task_statuses")
+        assert _column_names(engine, "task_statuses") == {
+            "id",
+            "task_id",
+            "status",
+            "submission_id",
+            "error_type",
+            "retries",
+            "created_at",
+            "updated_at",
+        }
+
+        task_status_indexes = _indexes(engine, "task_statuses")
+        task_id_index = task_status_indexes["ix_task_statuses_task_id"]
+        assert task_id_index["column_names"] == ["task_id"]
+        assert task_id_index["unique"]
+
+        command.downgrade(alembic_config, "20260529_0002")
+        inspector = inspect(engine)
+        assert not inspector.has_table("task_statuses")
+    finally:
+        engine.dispose()
+
+
+def test_create_all_schema_matches_alembic_head_for_task_statuses(
+    monkeypatch, tmp_path
+):
+    alembic_database_url = (
+        f"sqlite:///{(tmp_path / 'alembic_task_status.db').as_posix()}"
+    )
+    create_all_database_url = (
+        f"sqlite:///{(tmp_path / 'create_all_task_status.db').as_posix()}"
+    )
+    monkeypatch.setenv("DATABASE_URL", alembic_database_url)
+
+    alembic_engine = create_engine(alembic_database_url)
+    create_all_engine = create_engine(create_all_database_url)
+    try:
+        command.upgrade(_alembic_config(), "head")
+        Base.metadata.create_all(bind=create_all_engine)
+
+        assert _column_names(alembic_engine, "task_statuses") == _column_names(
+            create_all_engine, "task_statuses"
+        )
+
+        alembic_index = _indexes(alembic_engine, "task_statuses")[
+            "ix_task_statuses_task_id"
+        ]
+        create_all_index = _indexes(create_all_engine, "task_statuses")[
+            "ix_task_statuses_task_id"
+        ]
+        assert (
+            alembic_index["column_names"]
+            == create_all_index["column_names"]
+            == ["task_id"]
         )
         assert alembic_index["unique"]
         assert create_all_index["unique"]

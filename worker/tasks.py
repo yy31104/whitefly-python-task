@@ -14,7 +14,8 @@ from shared.logging import (
     resolve_request_id,
     set_request_id,
 )
-from shared.services import save_submission_from_worker
+from shared.services import IdempotencyConflict, save_submission_from_worker
+from shared.task_status import record_task_status
 from worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ def save_async_submission_task(
     }
     if effective_idempotency_key:
         task_log_context["effective_idempotency_key"] = effective_idempotency_key
+    _record_task_status(task_id, "processing", retries=retries)
     logger.info(
         "async submission task start",
         extra={
@@ -81,6 +83,12 @@ def save_async_submission_task(
             status="processed",
             idempotency_key=effective_idempotency_key,
         )
+        _record_task_status(
+            task_id,
+            "processed",
+            submission_id=submission.id,
+            retries=retries,
+        )
         logger.info(
             "async submission task success",
             extra={
@@ -92,6 +100,12 @@ def save_async_submission_task(
         return submission.id
     except Exception as exc:
         if _will_autoretry(self, exc, retries):
+            _record_task_status(
+                task_id,
+                "retrying",
+                error_type=type(exc).__name__,
+                retries=retries,
+            )
             logger.warning(
                 "async submission task retry scheduled",
                 extra={
@@ -101,6 +115,12 @@ def save_async_submission_task(
                 },
             )
         else:
+            _record_task_status(
+                task_id,
+                "conflict" if isinstance(exc, IdempotencyConflict) else "failed",
+                error_type=type(exc).__name__,
+                retries=retries,
+            )
             logger.exception(
                 "async submission task failed",
                 extra={
@@ -119,3 +139,33 @@ def _will_autoretry(task, exc: Exception, retries: int) -> bool:
     return isinstance(exc, OperationalError) and (
         max_retries is None or retries < max_retries
     )
+
+
+def _record_task_status(
+    task_id: str | None,
+    status: str,
+    *,
+    submission_id: int | None = None,
+    error_type: str | None = None,
+    retries: int | None = None,
+) -> None:
+    if not task_id:
+        return
+    try:
+        record_task_status(
+            task_id,
+            status,
+            submission_id=submission_id,
+            error_type=error_type,
+            retries=retries,
+        )
+    except Exception as exc:
+        logger.warning(
+            "task status write failed",
+            extra={
+                "event": "task_status_write_failed",
+                "task_id": task_id,
+                "status": status,
+                "error_type": type(exc).__name__,
+            },
+        )

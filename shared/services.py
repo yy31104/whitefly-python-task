@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from shared.db import session_scope
 from shared.logging import get_request_id
 from shared.models import Submission
+from shared.task_status import mark_task_queued
 from shared.validation import validate_submission_payload
 
 logger = logging.getLogger(__name__)
@@ -214,6 +215,18 @@ def enqueue_submission_async(
         raise QueueUnavailable(
             "Queue is temporarily unavailable. Please try again shortly."
         ) from exc
+    try:
+        mark_task_queued(task.id)
+    except Exception as exc:
+        logger.warning(
+            "task status write failed",
+            extra={
+                "event": "task_status_write_failed",
+                "task_id": task.id,
+                "status": "queued",
+                "error_type": type(exc).__name__,
+            },
+        )
     return task.id
 
 
