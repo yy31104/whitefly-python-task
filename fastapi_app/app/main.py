@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from fastapi_app.app.routers import router
 from shared.db import init_database
+from shared.logging import (
+    clear_request_id,
+    configure_logging,
+    resolve_request_id,
+    set_request_id,
+)
+
+logger = logging.getLogger(__name__)
+_FORM_POST_PATHS = {"/sync-form", "/async-form"}
 
 
 def _default_database_url() -> str:
@@ -32,10 +43,14 @@ def create_app(
     database_url: str | None = None,
     url_prefix: str | None = None,
 ) -> FastAPI:
+    configure_logging()
+
     app = FastAPI(title="Whitefly FastAPI App")
 
     db_url = database_url or os.getenv("DATABASE_URL", _default_database_url())
-    prefix = (url_prefix if url_prefix is not None else os.getenv("FASTAPI_URL_PREFIX", "")).rstrip("/")
+    prefix = (
+        url_prefix if url_prefix is not None else os.getenv("FASTAPI_URL_PREFIX", "")
+    ).rstrip("/")
     app_env = os.getenv("APP_ENV", "development").strip().lower()
     secret_key = os.getenv("SECRET_KEY")
     if app_env == "production" and not secret_key:
@@ -54,8 +69,70 @@ def create_app(
     app.state.rate_limit_post_requests = _read_int_env("RATE_LIMIT_POST_REQUESTS", 20)
     app.state.rate_limit_window_seconds = _read_int_env("RATE_LIMIT_WINDOW_SECONDS", 60)
 
+    _register_request_observability(app)
     app.include_router(router, prefix=prefix)
     return app
+
+
+def _register_request_observability(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def request_id_middleware(request: Request, call_next):
+        request_id = resolve_request_id(request.headers.get("x-request-id"))
+        set_request_id(request_id)
+        started_at = time.perf_counter()
+        is_form_post = _is_form_post_request(request)
+
+        if is_form_post:
+            logger.info(
+                "form post start",
+                extra={
+                    "event": "form_post_start",
+                    "method": request.method,
+                    "path": request.url.path,
+                },
+            )
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            if is_form_post:
+                logger.exception(
+                    "form post failed",
+                    extra={
+                        "event": "form_post_failed",
+                        "method": request.method,
+                        "path": request.url.path,
+                        "duration_ms": round(
+                            (time.perf_counter() - started_at) * 1000, 2
+                        ),
+                    },
+                )
+            raise
+        else:
+            response.headers["X-Request-ID"] = request_id
+            if is_form_post:
+                logger.info(
+                    "form post end",
+                    extra={
+                        "event": "form_post_end",
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": response.status_code,
+                        "duration_ms": round(
+                            (time.perf_counter() - started_at) * 1000, 2
+                        ),
+                    },
+                )
+            return response
+        finally:
+            clear_request_id()
+
+
+def _is_form_post_request(request: Request) -> bool:
+    path = request.url.path.rstrip("/") or "/"
+    return request.method == "POST" and any(
+        path.endswith(form_path) for form_path in _FORM_POST_PATHS
+    )
 
 
 app = create_app()

@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from kombu.exceptions import OperationalError
 
 from shared.db import session_scope
+from shared.logging import get_request_id
 from shared.models import Submission
 from shared.validation import validate_submission_payload
 
@@ -73,14 +74,21 @@ def enqueue_submission_async(
     # Local import avoids circular imports between task and service modules.
     from worker.tasks import save_async_submission_task
 
+    task_kwargs = {
+        "first_name": validated["first_name"],
+        "last_name": validated["last_name"],
+        "email": validated["email"],
+    }
+    request_id = get_request_id()
+    if request_id:
+        task_kwargs["request_id"] = request_id
+
     try:
-        task = save_async_submission_task.delay(
-            first_name=validated["first_name"],
-            last_name=validated["last_name"],
-            email=validated["email"],
-        )
+        task = save_async_submission_task.delay(**task_kwargs)
     except OperationalError as exc:
-        raise QueueUnavailable("Queue is temporarily unavailable. Please try again shortly.") from exc
+        raise QueueUnavailable(
+            "Queue is temporarily unavailable. Please try again shortly."
+        ) from exc
     return task.id
 
 
@@ -96,7 +104,9 @@ def save_submission_from_worker(
     return _persist_submission(validated, form_type=form_type, status=status)
 
 
-def list_submissions(limit: int | None = DEFAULT_SUBMISSIONS_LIMIT) -> Sequence[Submission]:
+def list_submissions(
+    limit: int | None = DEFAULT_SUBMISSIONS_LIMIT,
+) -> Sequence[Submission]:
     resolved_limit = DEFAULT_SUBMISSIONS_LIMIT if limit is None else max(1, int(limit))
     with session_scope() as session:
         return (
