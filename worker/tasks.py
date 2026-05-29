@@ -5,6 +5,7 @@ import os
 
 from flask_app.app.config import Config
 from shared.db import init_database
+from shared.idempotency import sanitize_idempotency_key
 from shared.logging import (
     clear_request_id,
     configure_logging,
@@ -36,9 +37,11 @@ def save_async_submission_task(
     last_name: str,
     email: str,
     request_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> int:
     configure_logging()
     set_request_id(resolve_request_id(request_id))
+    resolved_idempotency_key = sanitize_idempotency_key(idempotency_key)
     task_id = getattr(self.request, "id", None)
     retries = getattr(self.request, "retries", 0) or 0
     task_log_context = {
@@ -46,6 +49,8 @@ def save_async_submission_task(
         "task_name": _TASK_NAME,
         "retries": retries,
     }
+    if resolved_idempotency_key:
+        task_log_context["idempotency_key"] = resolved_idempotency_key
     logger.info(
         "async submission task start",
         extra={
@@ -61,6 +66,7 @@ def save_async_submission_task(
             email=email,
             form_type="async",
             status="processed",
+            idempotency_key=resolved_idempotency_key,
         )
         logger.info(
             "async submission task success",

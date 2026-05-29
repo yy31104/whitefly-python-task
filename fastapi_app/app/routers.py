@@ -7,13 +7,25 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from shared.rate_limit import RateLimitExceeded, enforce_rate_limit, trusted_client_identifier
-from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
+from shared.idempotency import generate_idempotency_key, resolve_idempotency_key
+from shared.rate_limit import (
+    RateLimitExceeded,
+    enforce_rate_limit,
+    trusted_client_identifier,
+)
+from shared.services import (
+    IdempotencyConflict,
+    QueueUnavailable,
+    create_submission_sync,
+    enqueue_submission_async,
+    list_submissions,
+)
 from shared.validation import ValidationError
 
-
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parents[1] / "templates")
+)
 
 
 def _redirect_with_message(
@@ -32,11 +44,13 @@ def _context(
     form_data: dict[str, str] | None = None,
     message: str | None = None,
     category: str = "success",
+    idempotency_key: str | None = None,
 ) -> dict:
     return {
         "form_data": form_data or {},
         "message": message,
         "category": category,
+        "idempotency_key": idempotency_key or generate_idempotency_key(),
     }
 
 
@@ -45,6 +59,13 @@ def _client_identifier(request: Request) -> str:
         x_real_ip=request.headers.get("x-real-ip"),
         x_forwarded_for=request.headers.get("x-forwarded-for"),
         remote_addr=request.client.host if request.client else None,
+    )
+
+
+def _request_idempotency_key(request: Request, form_value: str | None) -> str | None:
+    return resolve_idempotency_key(
+        header=request.headers.get("idempotency-key"),
+        form=form_value,
     )
 
 
@@ -78,6 +99,7 @@ async def sync_form_post(
     last_name: str = Form(...),
     email: str = Form(...),
     honeypot: str = Form(""),
+    idempotency_key: str = Form(""),
 ) -> HTMLResponse:
     form_data = {
         "first_name": first_name,
@@ -85,6 +107,7 @@ async def sync_form_post(
         "email": email,
         "honeypot": honeypot,
     }
+    resolved_idempotency_key = _request_idempotency_key(request, idempotency_key)
 
     try:
         enforce_rate_limit(
@@ -94,7 +117,10 @@ async def sync_form_post(
             window_seconds=request.app.state.rate_limit_window_seconds,
             redis_url=request.app.state.redis_url,
         )
-        create_submission_sync(**form_data)
+        create_submission_sync(
+            **form_data,
+            idempotency_key=resolved_idempotency_key,
+        )
     except RateLimitExceeded as exc:
         response = templates.TemplateResponse(
             request=request,
@@ -104,6 +130,17 @@ async def sync_form_post(
         )
         response.headers["Retry-After"] = str(exc.retry_after)
         return response
+    except IdempotencyConflict:
+        return templates.TemplateResponse(
+            request=request,
+            name="sync_form.html",
+            context=_context(
+                form_data=form_data,
+                message="Submission conflicts with a previous idempotency key.",
+                category="error",
+            ),
+            status_code=409,
+        )
     except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,
@@ -135,6 +172,7 @@ async def async_form_post(
     last_name: str = Form(...),
     email: str = Form(...),
     honeypot: str = Form(""),
+    idempotency_key: str = Form(""),
 ) -> HTMLResponse:
     form_data = {
         "first_name": first_name,
@@ -142,6 +180,7 @@ async def async_form_post(
         "email": email,
         "honeypot": honeypot,
     }
+    resolved_idempotency_key = _request_idempotency_key(request, idempotency_key)
 
     try:
         enforce_rate_limit(
@@ -151,7 +190,10 @@ async def async_form_post(
             window_seconds=request.app.state.rate_limit_window_seconds,
             redis_url=request.app.state.redis_url,
         )
-        task_id = enqueue_submission_async(**form_data)
+        task_id = enqueue_submission_async(
+            **form_data,
+            idempotency_key=resolved_idempotency_key,
+        )
     except RateLimitExceeded as exc:
         response = templates.TemplateResponse(
             request=request,
@@ -176,7 +218,9 @@ async def async_form_post(
             status_code=400,
         )
 
-    return _redirect_with_message(request, "async_form_get", f"Submission queued. Task ID: {task_id}")
+    return _redirect_with_message(
+        request, "async_form_get", f"Submission queued. Task ID: {task_id}"
+    )
 
 
 @router.get("/submissions", response_class=HTMLResponse)
@@ -194,4 +238,6 @@ async def submissions(
         "message": message,
         "category": category,
     }
-    return templates.TemplateResponse(request=request, name="submissions.html", context=context)
+    return templates.TemplateResponse(
+        request=request, name="submissions.html", context=context
+    )

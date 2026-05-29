@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 import pytest
@@ -12,6 +13,8 @@ from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
 from shared.services import QueueUnavailable
+
+_IDEMPOTENCY_FIELD_RE = re.compile(r'name="idempotency_key" value="([^"]+)"')
 
 
 @pytest.fixture
@@ -29,6 +32,17 @@ def client(app):
 def _count_submissions() -> int:
     with session_scope() as session:
         return session.query(Submission).count()
+
+
+def _submission_by_email(email: str) -> Submission:
+    with session_scope() as session:
+        return session.query(Submission).filter_by(email=email).one()
+
+
+def _extract_hidden_idempotency_key(response) -> str:
+    match = _IDEMPOTENCY_FIELD_RE.search(response.text)
+    assert match is not None
+    return match.group(1)
 
 
 def test_home_page(client: TestClient):
@@ -103,10 +117,24 @@ def test_sync_form_get(client: TestClient):
     assert "Sync Submission Form" in response.text
 
 
+def test_sync_form_get_renders_hidden_idempotency_key(client: TestClient):
+    response = client.get("/sync-form")
+
+    key = _extract_hidden_idempotency_key(response)
+    assert uuid.UUID(key).version == 4
+
+
 def test_async_form_get(client: TestClient):
     response = client.get("/async-form")
     assert response.status_code == 200
     assert "Async Submission Form" in response.text
+
+
+def test_async_form_get_renders_hidden_idempotency_key(client: TestClient):
+    response = client.get("/async-form")
+
+    key = _extract_hidden_idempotency_key(response)
+    assert uuid.UUID(key).version == 4
 
 
 def test_valid_sync_post_creates_record(client: TestClient):
@@ -126,6 +154,95 @@ def test_valid_sync_post_creates_record(client: TestClient):
     assert _count_submissions() == 1
 
 
+def test_sync_double_post_same_idempotency_key_creates_one_record(
+    client: TestClient,
+):
+    form_data = {
+        "first_name": "Ada",
+        "last_name": "Lovelace",
+        "email": "fastapi-idempotent@example.com",
+        "honeypot": "",
+        "idempotency_key": "fastapi-sync-same-key",
+    }
+
+    first = client.post("/sync-form", data=form_data, follow_redirects=False)
+    second = client.post("/sync-form", data=form_data, follow_redirects=False)
+
+    assert first.status_code == 303
+    assert second.status_code == 303
+    assert _count_submissions() == 1
+
+
+def test_sync_idempotency_header_overrides_form_key(client: TestClient):
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "fastapi-header@example.com",
+            "honeypot": "",
+            "idempotency_key": "fastapi-form-key",
+        },
+        headers={"Idempotency-Key": "fastapi-header-key"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    row = _submission_by_email("fastapi-header@example.com")
+    assert row.idempotency_key == "fastapi-header-key"
+
+
+def test_sync_malformed_idempotency_key_is_ignored(client: TestClient):
+    response = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "fastapi-malformed@example.com",
+            "honeypot": "",
+            "idempotency_key": "bad key",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    row = _submission_by_email("fastapi-malformed@example.com")
+    assert row.idempotency_key is None
+
+
+def test_sync_same_idempotency_key_different_payload_returns_409(
+    client: TestClient,
+):
+    first = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "fastapi-conflict@example.com",
+            "honeypot": "",
+            "idempotency_key": "fastapi-conflict-key",
+        },
+        follow_redirects=False,
+    )
+    second = client.post(
+        "/sync-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "fastapi-conflict@example.com",
+            "honeypot": "",
+            "idempotency_key": "fastapi-conflict-key",
+        },
+        follow_redirects=False,
+    )
+
+    assert first.status_code == 303
+    assert second.status_code == 409
+    assert "Submission conflicts with a previous idempotency key." in second.text
+    assert uuid.UUID(_extract_hidden_idempotency_key(second)).version == 4
+    assert _count_submissions() == 1
+
+
 def test_invalid_sync_post_shows_error(client: TestClient):
     response = client.post(
         "/sync-form",
@@ -141,6 +258,69 @@ def test_invalid_sync_post_shows_error(client: TestClient):
     assert response.status_code == 400
     assert "Enter a valid email address." in response.text
     assert _count_submissions() == 0
+
+
+def test_async_post_with_idempotency_key_passes_key_to_task(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list[dict[str, str]] = []
+
+    class DummyTaskResult:
+        id = "task-fastapi-with-key"
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+        return DummyTaskResult()
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+
+    response = client.post(
+        "/async-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "fastapi-async-key@example.com",
+            "honeypot": "",
+            "idempotency_key": "fastapi-async-key",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert calls[0]["idempotency_key"] == "fastapi-async-key"
+
+
+def test_async_post_without_idempotency_key_omits_task_kwarg(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list[dict[str, str]] = []
+
+    class DummyTaskResult:
+        id = "task-fastapi-without-key"
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+        return DummyTaskResult()
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+
+    response = client.post(
+        "/async-form",
+        data={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "fastapi-async-no-key@example.com",
+            "honeypot": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "idempotency_key" not in calls[0]
 
 
 def test_valid_async_post_queues_task(
