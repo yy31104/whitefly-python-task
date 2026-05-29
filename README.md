@@ -53,6 +53,21 @@ Run FastAPI:
 .\.venv\Scripts\python -m uvicorn fastapi_app.app.main:app --reload --port 8000
 ```
 
+## Database Migrations
+Alembic is configured under `migrations/` with a baseline migration for the current `submissions` table. For a fresh database, run migrations before first app startup:
+```powershell
+.\.venv\Scripts\alembic upgrade head
+```
+
+The baseline matches the schema that the app currently creates with SQLAlchemy metadata. If the app already created the current schema with `create_all`, mark the database as current before future migrations:
+```powershell
+docker compose exec flask_app alembic stamp head
+```
+
+This PR does not auto-run Alembic yet.
+
+Idempotency keys, async retry/dead-letter behavior, and richer task status are planned follow-up stages after migration tooling is in place.
+
 ## Running with Docker Compose
 ```powershell
 Copy-Item .env.example .env -Force
@@ -155,8 +170,8 @@ Latest sample summary:
   - honeypot is validated before deeper field validation.
 
 ## Future Improvements
-- Database migrations:
-  - introduce Alembic-based schema migration workflow.
+- Idempotent async processing:
+  - add an idempotency key before enabling async retries or dead-letter handling.
 - Stronger admin/auth protection:
   - protect internal pages (such as submissions) with robust authentication/authorization.
 - Richer async lifecycle:
