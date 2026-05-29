@@ -40,6 +40,8 @@ def _ensure_database_ready() -> None:
     retry_backoff=True,
     retry_backoff_max=30,
     retry_jitter=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def save_async_submission_task(
     self,
