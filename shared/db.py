@@ -19,7 +19,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=
 def _build_engine(database_url: str) -> Engine:
     is_sqlite = database_url.startswith("sqlite")
     connect_args = {"check_same_thread": False} if is_sqlite else {}
-    engine_kwargs = {} if is_sqlite else {"pool_pre_ping": True}
+    engine_kwargs = {"hide_parameters": True}
+    if not is_sqlite:
+        engine_kwargs["pool_pre_ping"] = True
     return create_engine(database_url, connect_args=connect_args, **engine_kwargs)
 
 
