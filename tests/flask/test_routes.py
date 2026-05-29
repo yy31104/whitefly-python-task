@@ -12,6 +12,7 @@ from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
 from shared.services import QueueUnavailable
+from shared.task_status import mark_task_queued, record_task_status
 
 _IDEMPOTENCY_FIELD_RE = re.compile(r'name="idempotency_key" value="([^"]+)"')
 
@@ -48,6 +49,23 @@ def _extract_hidden_idempotency_key(response) -> str:
     match = _IDEMPOTENCY_FIELD_RE.search(response.get_data(as_text=True))
     assert match is not None
     return match.group(1)
+
+
+def _assert_async_status_payload(payload: dict, *, task_id: str, status: str) -> None:
+    assert payload["task_id"] == task_id
+    assert payload["status"] == status
+    assert set(payload) == {
+        "task_id",
+        "status",
+        "submission_id",
+        "error_type",
+        "retries",
+        "created_at",
+        "updated_at",
+    }
+    assert isinstance(payload["retries"], int)
+    assert isinstance(payload["created_at"], str)
+    assert isinstance(payload["updated_at"], str)
 
 
 def test_home_page(client):
@@ -345,6 +363,105 @@ def test_async_post_without_idempotency_key_omits_task_kwarg(client, monkeypatch
 
     assert response.status_code == 302
     assert "idempotency_key" not in calls[0]
+
+
+def test_async_status_returns_queued_json_without_pii(client):
+    mark_task_queued("flask-task-queued")
+
+    response = client.get("/async-status/flask-task-queued")
+
+    assert response.status_code == 200
+    assert "application/json" in response.content_type
+    payload = response.get_json()
+    _assert_async_status_payload(
+        payload,
+        task_id="flask-task-queued",
+        status="queued",
+    )
+    assert payload["submission_id"] is None
+    assert payload["error_type"] is None
+    body = response.get_data(as_text=True)
+    assert "Ada" not in body
+    assert "Lovelace" not in body
+    assert "ada@example.com" not in body
+    assert "payload" not in body
+
+
+def test_async_status_returns_processed_json(client):
+    record_task_status(
+        "flask-task-processed",
+        "processed",
+        submission_id=123,
+        retries=1,
+    )
+
+    response = client.get("/async-status/flask-task-processed")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    _assert_async_status_payload(
+        payload,
+        task_id="flask-task-processed",
+        status="processed",
+    )
+    assert payload["submission_id"] == 123
+    assert payload["error_type"] is None
+    assert payload["retries"] == 1
+
+
+def test_async_status_returns_conflict_json(client):
+    record_task_status(
+        "flask-task-conflict",
+        "conflict",
+        error_type="IdempotencyConflict",
+        retries=0,
+    )
+
+    response = client.get("/async-status/flask-task-conflict")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    _assert_async_status_payload(
+        payload,
+        task_id="flask-task-conflict",
+        status="conflict",
+    )
+    assert payload["submission_id"] is None
+    assert payload["error_type"] == "IdempotencyConflict"
+
+
+def test_async_status_unknown_task_returns_404_json(client):
+    response = client.get("/async-status/flask-task-missing")
+
+    assert response.status_code == 404
+    assert "application/json" in response.content_type
+    assert response.get_json() == {"detail": "Task status not found."}
+
+
+def test_async_status_malformed_task_id_returns_400_json(client):
+    response = client.get("/async-status/bad%20task")
+
+    assert response.status_code == 400
+    assert "application/json" in response.content_type
+    assert response.get_json() == {"detail": "Invalid task id."}
+
+
+def test_async_status_route_works_with_flask_prefix(tmp_path):
+    db_path = tmp_path / "flask_prefixed_status.db"
+    prefixed_app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret",
+            "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+            "FLASK_URL_PREFIX": "/flask",
+        }
+    )
+    mark_task_queued("flask-prefix-task")
+
+    response = prefixed_app.test_client().get("/flask/async-status/flask-prefix-task")
+
+    assert response.status_code == 200
+    assert response.get_json()["task_id"] == "flask-prefix-task"
 
 
 def test_form_post_logs_request_id_without_raw_pii(client, caplog):

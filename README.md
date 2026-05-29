@@ -101,6 +101,8 @@ Async worker failures are visible in structured worker logs with `request_id`, `
 
 Async task lifecycle is recorded in the dedicated `task_statuses` table, not the Celery result backend (`task_ignore_result=True` remains set). Recorded states are `queued`, `processing`, `retrying`, `processed`, `failed`, and `conflict`; `conflict` represents an async `IdempotencyConflict`. Status writes are best-effort and eventually consistent, so enqueue and worker processing are not failed by status-recording errors. A status endpoint and UI polling remain future PRs, along with a real dead-letter queue.
 
+Read-only JSON task status is exposed at `/flask/async-status/<task_id>` and `/fastapi/async-status/{task_id}`. A found task returns `200` with `task_id`, `status`, `submission_id`, `error_type`, `retries`, `created_at`, and `updated_at`; malformed task ids return `400`, and well-formed missing task ids return `404`. A `404` immediately after enqueue can mean the best-effort status write has not landed yet, so clients may poll again. Responses include no submission names, emails, or form payloads, and the endpoint stays enabled independently of the submissions page. UI polling remains a future PR.
+
 Health check status (explicit container names used in this project):
 ```powershell
 docker inspect --format "{{json .State.Health.Status}}" whitefly-flask

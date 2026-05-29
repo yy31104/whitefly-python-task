@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 import shared.task_status as task_status_module
 from shared.db import init_database, session_scope
 from shared.models import TaskStatus
-from shared.task_status import mark_task_queued, record_task_status
+from shared.task_status import (
+    get_task_status as read_task_status,
+    mark_task_queued,
+    record_task_status,
+    sanitize_task_id,
+    serialize_task_status,
+)
 
 
 def _get_task_status(task_id: str) -> TaskStatus:
@@ -37,6 +43,23 @@ def _assert_no_pii_logged(caplog) -> None:
     assert "CELERY_BROKER_URL" not in rendered_logs
 
 
+def test_sanitize_task_id_accepts_uuid_and_safe_token():
+    assert (
+        sanitize_task_id("550e8400-e29b-41d4-a716-446655440000")
+        == "550e8400-e29b-41d4-a716-446655440000"
+    )
+    assert sanitize_task_id("task_123.test:abc-XYZ") == "task_123.test:abc-XYZ"
+    assert sanitize_task_id("x" * 64) == "x" * 64
+
+
+def test_sanitize_task_id_rejects_unsafe_values():
+    assert sanitize_task_id(None) is None
+    assert sanitize_task_id("") is None
+    assert sanitize_task_id("bad task") is None
+    assert sanitize_task_id("bad\ntask") is None
+    assert sanitize_task_id("x" * 65) is None
+
+
 def test_mark_task_queued_inserts_queued(tmp_path):
     init_database(f"sqlite:///{(tmp_path / 'task_status_queued.db').as_posix()}")
 
@@ -47,6 +70,51 @@ def test_mark_task_queued_inserts_queued(tmp_path):
     assert row.submission_id is None
     assert row.error_type is None
     assert row.retries == 0
+
+
+def test_get_task_status_returns_row_when_found(tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'task_status_get_found.db').as_posix()}")
+    mark_task_queued("task-get-found")
+
+    row = read_task_status("task-get-found")
+
+    assert row is not None
+    assert row.task_id == "task-get-found"
+    assert row.status == "queued"
+
+
+def test_get_task_status_returns_none_when_not_found(tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'task_status_get_missing.db').as_posix()}")
+
+    assert read_task_status("task-get-missing") is None
+
+
+def test_serialize_task_status_returns_json_safe_fields_without_pii(tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'task_status_serialize.db').as_posix()}")
+    record_task_status(
+        "task-serialize",
+        "conflict",
+        error_type="IdempotencyConflict",
+        retries=2,
+    )
+
+    row = _get_task_status("task-serialize")
+    payload = serialize_task_status(row)
+
+    assert payload == {
+        "task_id": "task-serialize",
+        "status": "conflict",
+        "submission_id": None,
+        "error_type": "IdempotencyConflict",
+        "retries": 2,
+        "created_at": row.created_at.isoformat(),
+        "updated_at": row.updated_at.isoformat(),
+    }
+    assert "T" in payload["created_at"] or " " in payload["created_at"]
+    assert "first_name" not in payload
+    assert "last_name" not in payload
+    assert "email" not in payload
+    assert "payload" not in payload
 
 
 def test_mark_task_queued_does_not_overwrite_existing_status(tmp_path):

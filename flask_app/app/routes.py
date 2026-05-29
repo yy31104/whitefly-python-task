@@ -5,6 +5,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -25,6 +26,11 @@ from shared.services import (
     create_submission_sync,
     enqueue_submission_async,
     list_submissions,
+)
+from shared.task_status import (
+    get_task_status,
+    sanitize_task_id,
+    serialize_task_status,
 )
 from shared.validation import ValidationError
 
@@ -175,6 +181,19 @@ def async_form():
         form_data={},
         idempotency_key=_fresh_form_idempotency_key(),
     )
+
+
+@bp.get("/async-status/<task_id>")
+def async_status(task_id: str):
+    sanitized_task_id = sanitize_task_id(task_id)
+    if sanitized_task_id is None:
+        return jsonify({"detail": "Invalid task id."}), 400
+
+    task_status = get_task_status(sanitized_task_id)
+    if task_status is None:
+        return jsonify({"detail": "Task status not found."}), 404
+
+    return jsonify(serialize_task_status(task_status))
 
 
 @bp.get("/submissions")
