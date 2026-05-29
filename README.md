@@ -66,7 +66,7 @@ docker compose exec flask_app alembic stamp head
 
 This PR does not auto-run Alembic yet.
 
-The `idempotency_key` schema now exists on submissions. Browser form submissions include a hidden idempotency key, and API clients may send an `Idempotency-Key` header. The header wins over the form field; bad or blank keys are ignored and behave like no key. Sync conflicts return `409`; async conflicts currently surface as structured worker failure logs until task status exists. Celery retry remains disabled.
+The `idempotency_key` schema now exists on submissions. Browser form submissions include a hidden idempotency key, and API clients may send an `Idempotency-Key` header. The header wins over the form field; bad or blank keys are ignored and behave like no key. Sync conflicts return `409`; async conflicts currently surface as structured worker failure logs until task status exists.
 
 ## Running with Docker Compose
 ```powershell
@@ -97,7 +97,7 @@ docker compose logs nginx flask_app worker | Select-String demo-trace-001
 
 For requests without `X-Request-ID`, nginx stamps one; copy the response header value and search the nginx, app, and worker logs for that ID.
 
-Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. Failed async tasks are not retried yet by design; retry, dead-letter handling, idempotency, and richer task status are deferred until submission persistence is idempotent.
+Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. The worker retries transient SQLAlchemy `OperationalError` only, with max retries `3`, exponential backoff, and jitter. Keyless async tasks use the Celery `task_id` as the effective idempotency key, so retries or redeliveries converge on one row. `IdempotencyConflict`, `ValidationError`, `IntegrityError`, and unexpected errors are terminal. A terminal `async_submission_task_failed` log with `retries` at `max_retries` is the current exhausted/dead signal; `acks_late`, `reject_on_worker_lost`, a real dead-letter queue, and task status remain future PRs.
 
 Health check status (explicit container names used in this project):
 ```powershell
@@ -170,8 +170,8 @@ Latest sample summary:
   - honeypot is validated before deeper field validation.
 
 ## Future Improvements
-- Idempotent async processing:
-  - add an idempotency key before enabling async retries or dead-letter handling.
+- Richer async failure handling:
+  - add task status, dead-letter handling, and late-ack/lost-worker semantics.
 - Stronger admin/auth protection:
   - protect internal pages (such as submissions) with robust authentication/authorization.
 - Richer async lifecycle:
