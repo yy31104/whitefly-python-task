@@ -103,6 +103,8 @@ Async task lifecycle is recorded in the dedicated `task_statuses` table, not the
 
 Read-only JSON task status is exposed at `/flask/async-status/<task_id>` and `/fastapi/async-status/{task_id}`. A found task returns `200` with `task_id`, `status`, `submission_id`, `error_type`, `retries`, `created_at`, and `updated_at`; malformed task ids return `400`, and well-formed missing task ids return `404`. A `404` immediately after enqueue can mean the best-effort status write has not landed yet, so clients may poll again. Responses include no submission names, emails, or form payloads, and the endpoint stays enabled independently of the submissions page. UI polling remains a future PR.
 
+The async form pages use small inline vanilla JavaScript to poll task status every 2 seconds after a queued submission. The UI copy maps states to `Queued…`, `Processing…`, `Retrying after a temporary error…`, `Processed ✓`, `Failed. Please try again.`, and `Already received as a duplicate.` Terminal states stop polling, and polling caps after about 60 seconds. A fresh `404` is treated as not recorded yet, so polling continues. The status UI contains no PII. Inline JS is used because the project does not yet have a CSP/static-JS setup; the polling behavior is manually verifiable and has no JS test harness in this PR.
+
 Health check status (explicit container names used in this project):
 ```powershell
 docker inspect --format "{{json .State.Health.Status}}" whitefly-flask

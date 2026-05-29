@@ -38,9 +38,13 @@ def _redirect_with_message(
     route_name: str,
     message: str,
     category: str = "success",
+    task_id: str | None = None,
 ) -> RedirectResponse:
     path = request.app.url_path_for(route_name)
-    query = urlencode({"message": message, "category": category})
+    query_params = {"message": message, "category": category}
+    if task_id:
+        query_params["task_id"] = task_id
+    query = urlencode(query_params)
     return RedirectResponse(url=f"{path}?{query}", status_code=303)
 
 
@@ -50,12 +54,14 @@ def _context(
     message: str | None = None,
     category: str = "success",
     idempotency_key: str | None = None,
+    task_id: str | None = None,
 ) -> dict:
     return {
         "form_data": form_data or {},
         "message": message,
         "category": category,
         "idempotency_key": idempotency_key or generate_idempotency_key(),
+        "task_id": task_id,
     }
 
 
@@ -162,11 +168,16 @@ async def async_form_get(
     request: Request,
     message: str | None = None,
     category: str = "success",
+    task_id: str | None = None,
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="async_form.html",
-        context=_context(message=message, category=category),
+        context=_context(
+            message=message,
+            category=category,
+            task_id=sanitize_task_id(task_id),
+        ),
     )
 
 
@@ -224,7 +235,10 @@ async def async_form_post(
         )
 
     return _redirect_with_message(
-        request, "async_form_get", f"Submission queued. Task ID: {task_id}"
+        request,
+        "async_form_get",
+        f"Submission queued. Task ID: {task_id}",
+        task_id=task_id,
     )
 
 

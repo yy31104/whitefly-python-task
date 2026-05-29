@@ -174,12 +174,14 @@ def async_form():
             )
 
         flash(f"Submission queued. Task ID: {task_id}", "success")
-        return redirect(url_for("main.async_form"))
+        return redirect(url_for("main.async_form", task_id=task_id))
 
+    task_id = sanitize_task_id(request.args.get("task_id"))
     return render_template(
         "async_form.html",
         form_data={},
         idempotency_key=_fresh_form_idempotency_key(),
+        task_id=task_id,
     )
 
 
