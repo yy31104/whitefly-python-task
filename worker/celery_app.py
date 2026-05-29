@@ -24,5 +24,7 @@ celery_app.conf.update(
         "interval_step": 0.5,
         "interval_max": 2,
     },
+    # Retries/dead-letter are deferred until submission persistence is idempotent;
+    # worker failures are logged for visibility and dropped for now.
     task_ignore_result=True,
 )

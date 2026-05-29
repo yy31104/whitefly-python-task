@@ -82,6 +82,8 @@ docker compose logs nginx flask_app worker | Select-String demo-trace-001
 
 For requests without `X-Request-ID`, nginx stamps one; copy the response header value and search the nginx, app, and worker logs for that ID.
 
+Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. Failed async tasks are not retried yet by design; retry, dead-letter handling, idempotency, and richer task status are deferred until submission persistence is idempotent.
+
 Health check status (explicit container names used in this project):
 ```powershell
 docker inspect --format "{{json .State.Health.Status}}" whitefly-flask
