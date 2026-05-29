@@ -97,7 +97,7 @@ docker compose logs nginx flask_app worker | Select-String demo-trace-001
 
 For requests without `X-Request-ID`, nginx stamps one; copy the response header value and search the nginx, app, and worker logs for that ID.
 
-Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. The worker retries transient SQLAlchemy `OperationalError` only, with max retries `3`, exponential backoff, and jitter. Keyless async tasks use the Celery `task_id` as the effective idempotency key, so retries or redeliveries converge on one row. `IdempotencyConflict`, `ValidationError`, `IntegrityError`, and unexpected errors are terminal. A terminal `async_submission_task_failed` log with `retries` at `max_retries` is the current exhausted/dead signal; `acks_late`, `reject_on_worker_lost`, a real dead-letter queue, and task status remain future PRs.
+Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. The worker retries transient SQLAlchemy `OperationalError` only, with max retries `3`, exponential backoff, and jitter. `acks_late=True` and `reject_on_worker_lost=True` are enabled for the async worker task. If a worker is lost after DB commit but before ack, broker redelivery re-runs the same task id and dedups via the effective idempotency key. Keyless async tasks use the Celery `task_id` as the effective idempotency key, so retries or redeliveries converge on one row. `IdempotencyConflict`, `ValidationError`, `IntegrityError`, and unexpected errors are terminal: they are acked and logged, not looped forever. A terminal `async_submission_task_failed` log with `retries` at `max_retries` is the current exhausted/dead signal. With the Redis broker, hard-crash redelivery may be delayed by the broker visibility timeout rather than immediate. A real dead-letter queue and task status remain future PRs.
 
 Health check status (explicit container names used in this project):
 ```powershell
@@ -171,7 +171,7 @@ Latest sample summary:
 
 ## Future Improvements
 - Richer async failure handling:
-  - add task status, dead-letter handling, and late-ack/lost-worker semantics.
+  - add task status and dead-letter handling.
 - Stronger admin/auth protection:
   - protect internal pages (such as submissions) with robust authentication/authorization.
 - Richer async lifecycle:

@@ -33,6 +33,8 @@ def _assert_logs_are_pii_safe(records, *values: str) -> None:
 def test_save_async_submission_task_retry_config():
     assert OperationalError in worker_tasks.save_async_submission_task.autoretry_for
     assert worker_tasks.save_async_submission_task.max_retries == 3
+    assert worker_tasks.save_async_submission_task.acks_late is True
+    assert worker_tasks.save_async_submission_task.reject_on_worker_lost is True
 
 
 def test_save_async_submission_task_persists_record(
@@ -300,26 +302,30 @@ def test_exhausted_operational_error_logs_terminal_failure(monkeypatch, caplog):
     )
 
 
-def test_save_async_submission_task_retry_cannot_duplicate_with_same_task_id(
+def test_redelivered_keyless_task_reuses_same_task_id_without_duplicate(
     monkeypatch, tmp_path: Path
 ):
-    db_path = tmp_path / "worker_task_retry_no_duplicate.db"
+    db_path = tmp_path / "worker_task_redelivery_no_duplicate.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     monkeypatch.setattr(worker_tasks, "_db_ready", False)
     kwargs = {
         "first_name": "Grace",
         "last_name": "Hopper",
-        "email": "worker-retry-dedup@example.com",
+        "email": "worker-redelivery-dedup@example.com",
     }
 
     first = worker_tasks.save_async_submission_task.apply(
         kwargs=kwargs,
-        task_id="worker-retry-dedup-task-id",
+        task_id="worker-redelivery-dedup-task-id",
         throw=True,
     )
+
+    with session_scope() as session:
+        assert session.query(Submission).count() == 1
+
     second = worker_tasks.save_async_submission_task.apply(
         kwargs=kwargs,
-        task_id="worker-retry-dedup-task-id",
+        task_id="worker-redelivery-dedup-task-id",
         throw=True,
     )
 
@@ -329,7 +335,7 @@ def test_save_async_submission_task_retry_cannot_duplicate_with_same_task_id(
 
     assert second.result == first.result
     assert count == 1
-    assert row.idempotency_key == "worker-retry-dedup-task-id"
+    assert row.idempotency_key == "worker-redelivery-dedup-task-id"
 
 
 def test_keyless_async_submission_task_uses_task_id_as_idempotency_key(

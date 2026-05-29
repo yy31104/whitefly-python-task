@@ -24,8 +24,8 @@ celery_app.conf.update(
         "interval_step": 0.5,
         "interval_max": 2,
     },
-    # Transient DB retries are enabled on the task now that persistence is
-    # idempotent; acks_late, reject_on_worker_lost, dead-letter, and task
-    # status remain deferred.
+    # Transient DB retry, late ack, and reject-on-worker-lost are task-level
+    # settings. Duplicate-safe redelivery depends on task_id-based idempotency;
+    # task status and a real dead-letter queue remain deferred.
     task_ignore_result=True,
 )
