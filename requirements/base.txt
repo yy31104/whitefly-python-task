@@ -3,6 +3,7 @@ FastAPI
 uvicorn
 python-multipart
 SQLAlchemy
+alembic==1.18.4
 psycopg2-binary
 Jinja2
 celery
