@@ -66,7 +66,7 @@ docker compose exec flask_app alembic stamp head
 
 This PR does not auto-run Alembic yet.
 
-Idempotency keys, async retry/dead-letter behavior, and richer task status are planned follow-up stages after migration tooling is in place.
+The `idempotency_key` schema now exists on submissions. Service-layer deduplication, an HTTP `Idempotency-Key` contract, async task propagation, and Celery retry behavior are future PRs.
 
 ## Running with Docker Compose
 ```powershell

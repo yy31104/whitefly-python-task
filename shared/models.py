@@ -17,6 +17,9 @@ class Submission(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     form_type: Mapped[str] = mapped_column(String(20), nullable=False, default="sync")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="processed")
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
