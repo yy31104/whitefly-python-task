@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from fastapi_app.app.main import create_app
 from shared.db import session_scope
+from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
 from shared.services import QueueUnavailable
@@ -250,6 +251,50 @@ def test_prefixed_form_post_logs_request_id(tmp_path, caplog: pytest.LogCaptureF
     assert [record.event for record in records] == ["form_post_start", "form_post_end"]
     assert all(record.request_id == "fastapi-prefix-request-id" for record in records)
     assert all(record.path == "/fastapi/sync-form" for record in records)
+
+
+def test_unhandled_exception_response_includes_safe_request_id_and_clears_context(
+    tmp_path,
+):
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_exception_cleanup.db').as_posix()}"
+    )
+
+    @app.get("/boom")
+    async def boom():
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get(
+            "/boom",
+            headers={"X-Request-ID": "unsafe request id"},
+        )
+
+    assert response.status_code == 500
+    request_id = response.headers["X-Request-ID"]
+    assert request_id != "unsafe request id"
+    assert uuid.UUID(request_id)
+    assert get_request_id() is None
+
+
+def test_unhandled_exception_preserves_safe_request_id_and_clears_context(tmp_path):
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_exception_safe_request_id.db').as_posix()}"
+    )
+
+    @app.get("/boom")
+    async def boom():
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get(
+            "/boom",
+            headers={"X-Request-ID": "good-id-123"},
+        )
+
+    assert response.status_code == 500
+    assert response.headers["X-Request-ID"] == "good-id-123"
+    assert get_request_id() is None
 
 
 def test_async_post_queue_unavailable_returns_503(
