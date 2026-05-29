@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from shared.db import init_database, session_scope
-from shared.models import Submission
+from shared.models import Submission, TaskStatus
 from shared.services import (
     IdempotencyConflict,
     create_submission_sync,
@@ -31,6 +31,11 @@ def _count_submissions() -> int:
 def _get_submission(submission_id: int) -> Submission:
     with session_scope() as session:
         return session.query(Submission).filter_by(id=submission_id).one()
+
+
+def _get_task_status(task_id: str) -> TaskStatus:
+    with session_scope() as session:
+        return session.query(TaskStatus).filter_by(task_id=task_id).one()
 
 
 def _service_records(caplog):
@@ -238,7 +243,10 @@ def test_save_submission_from_worker_persists_key_and_async_form_type(service_db
     assert row.form_type == "async"
 
 
-def test_enqueue_submission_async_passes_idempotency_key(monkeypatch):
+def test_enqueue_submission_async_passes_idempotency_key_and_writes_queued_status(
+    monkeypatch, tmp_path
+):
+    init_database(f"sqlite:///{(tmp_path / 'enqueue_task_status.db').as_posix()}")
     calls: list[dict[str, str]] = []
 
     class DummyTaskResult:
@@ -261,6 +269,10 @@ def test_enqueue_submission_async_passes_idempotency_key(monkeypatch):
 
     assert task_id == "task-service-idempotency"
     assert calls[0]["idempotency_key"] == "service-async-key"
+    status = _get_task_status("task-service-idempotency")
+    assert status.status == "queued"
+    assert status.retries == 0
+    assert status.submission_id is None
 
 
 def test_enqueue_submission_async_omits_blank_idempotency_key(monkeypatch):
@@ -286,6 +298,36 @@ def test_enqueue_submission_async_omits_blank_idempotency_key(monkeypatch):
 
     assert task_id == "task-service-no-idempotency"
     assert "idempotency_key" not in calls[0]
+
+
+def test_enqueue_submission_async_returns_task_id_when_status_write_fails(
+    monkeypatch,
+):
+    calls: list[dict[str, str]] = []
+
+    class DummyTaskResult:
+        id = "task-status-write-fails"
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+        return DummyTaskResult()
+
+    def fail_mark_task_queued(_task_id):
+        raise RuntimeError("status write failed")
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+    monkeypatch.setattr("shared.services.mark_task_queued", fail_mark_task_queued)
+
+    task_id = enqueue_submission_async(
+        first_name="Grace",
+        last_name="Hopper",
+        email="status-failure@example.com",
+    )
+
+    assert task_id == "task-status-write-fails"
+    assert calls
 
 
 def test_list_submissions_applies_limit_and_desc_order(tmp_path):

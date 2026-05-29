@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 import worker.tasks as worker_tasks
 from shared.db import session_scope
 from shared.logging import get_request_id
-from shared.models import Submission
+from shared.models import Submission, TaskStatus
 from shared.services import IdempotencyConflict
 
 
@@ -30,6 +30,38 @@ def _assert_logs_are_pii_safe(records, *values: str) -> None:
     assert "email" not in rendered_logs
 
 
+def _get_task_status(task_id: str) -> TaskStatus:
+    with session_scope() as session:
+        return session.query(TaskStatus).filter_by(task_id=task_id).one()
+
+
+def _count_task_statuses() -> int:
+    with session_scope() as session:
+        return session.query(TaskStatus).count()
+
+
+def _assert_task_statuses_are_pii_safe(*values: str) -> None:
+    with session_scope() as session:
+        rendered_rows = "\n".join(
+            str(
+                {
+                    "task_id": row.task_id,
+                    "status": row.status,
+                    "submission_id": row.submission_id,
+                    "error_type": row.error_type,
+                    "retries": row.retries,
+                }
+            )
+            for row in session.query(TaskStatus).all()
+        )
+    for value in values:
+        assert value not in rendered_rows
+    assert "SECRET_KEY" not in rendered_rows
+    assert "DATABASE_URL" not in rendered_rows
+    assert "REDIS_URL" not in rendered_rows
+    assert "CELERY_BROKER_URL" not in rendered_rows
+
+
 def test_save_async_submission_task_retry_config():
     assert OperationalError in worker_tasks.save_async_submission_task.autoretry_for
     assert worker_tasks.save_async_submission_task.max_retries == 3
@@ -43,6 +75,14 @@ def test_save_async_submission_task_persists_record(
     db_path = tmp_path / "worker_task.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     monkeypatch.setattr(worker_tasks, "_db_ready", False)
+    status_calls: list[dict[str, object]] = []
+    real_record_task_status = worker_tasks.record_task_status
+
+    def spy_record_task_status(task_id, status, **kwargs):
+        status_calls.append({"task_id": task_id, "status": status, **kwargs})
+        return real_record_task_status(task_id, status, **kwargs)
+
+    monkeypatch.setattr(worker_tasks, "record_task_status", spy_record_task_status)
     caplog.set_level(logging.INFO)
 
     result = worker_tasks.save_async_submission_task.apply(
@@ -66,6 +106,27 @@ def test_save_async_submission_task_persists_record(
     assert row.form_type == "async"
     assert row.status == "processed"
     assert row.idempotency_key == "worker-success-task-id"
+    task_status = _get_task_status("worker-success-task-id")
+    assert task_status.status == "processed"
+    assert task_status.submission_id == submission_id
+    assert task_status.error_type is None
+    assert task_status.retries == 0
+    assert status_calls == [
+        {
+            "task_id": "worker-success-task-id",
+            "status": "processing",
+            "submission_id": None,
+            "error_type": None,
+            "retries": 0,
+        },
+        {
+            "task_id": "worker-success-task-id",
+            "status": "processed",
+            "submission_id": submission_id,
+            "error_type": None,
+            "retries": 0,
+        },
+    ]
 
     records = _worker_records(caplog)
     assert [record.event for record in records] == [
@@ -82,6 +143,7 @@ def test_save_async_submission_task_persists_record(
     )
 
     _assert_logs_are_pii_safe(records, "grace@example.com", "Grace", "Hopper")
+    _assert_task_statuses_are_pii_safe("grace@example.com", "Grace", "Hopper")
 
 
 def test_save_async_submission_task_accepts_missing_request_id(
@@ -185,7 +247,9 @@ def test_save_async_submission_task_retries_transient_operational_error_once(
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     monkeypatch.setattr(worker_tasks, "_db_ready", False)
     real_save_submission_from_worker = worker_tasks.save_submission_from_worker
+    real_record_task_status = worker_tasks.record_task_status
     attempts: list[dict[str, str]] = []
+    status_calls: list[dict[str, object]] = []
 
     def flaky_save_submission_from_worker(**kwargs):
         attempts.append(kwargs)
@@ -202,6 +266,12 @@ def test_save_async_submission_task_retries_transient_operational_error_once(
         "save_submission_from_worker",
         flaky_save_submission_from_worker,
     )
+
+    def spy_record_task_status(task_id, status, **kwargs):
+        status_calls.append({"task_id": task_id, "status": status, **kwargs})
+        return real_record_task_status(task_id, status, **kwargs)
+
+    monkeypatch.setattr(worker_tasks, "record_task_status", spy_record_task_status)
     caplog.set_level(logging.INFO)
 
     result = worker_tasks.save_async_submission_task.apply(
@@ -223,10 +293,21 @@ def test_save_async_submission_task_retries_transient_operational_error_once(
     assert len(attempts) == 2
     assert count == 1
     assert row.idempotency_key == "worker-transient-retry-task-id"
+    task_status = _get_task_status("worker-transient-retry-task-id")
+    assert task_status.status == "processed"
+    assert task_status.submission_id == result.result
+    assert task_status.error_type is None
+    assert task_status.retries == 1
     assert all(
         attempt["idempotency_key"] == "worker-transient-retry-task-id"
         for attempt in attempts
     )
+    assert [call["status"] for call in status_calls] == [
+        "processing",
+        "retrying",
+        "processing",
+        "processed",
+    ]
 
     records = _worker_records(caplog)
     assert [record.event for record in records] == [
@@ -249,7 +330,13 @@ def test_save_async_submission_task_retries_transient_operational_error_once(
     )
 
 
-def test_exhausted_operational_error_logs_terminal_failure(monkeypatch, caplog):
+def test_exhausted_operational_error_logs_terminal_failure(
+    monkeypatch, tmp_path: Path, caplog
+):
+    db_path = tmp_path / "worker_task_exhausted_operational_error.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+    worker_tasks._ensure_database_ready()
     monkeypatch.setattr(worker_tasks, "_ensure_database_ready", lambda: None)
     attempts: list[None] = []
 
@@ -283,6 +370,11 @@ def test_exhausted_operational_error_logs_terminal_failure(monkeypatch, caplog):
     assert isinstance(result.result, OperationalError)
     assert len(attempts) == 1
     assert get_request_id() is None
+    task_status = _get_task_status("worker-exhausted-task-id")
+    assert task_status.status == "failed"
+    assert task_status.submission_id is None
+    assert task_status.error_type == "OperationalError"
+    assert task_status.retries == 3
 
     records = _worker_records(caplog)
     assert [record.event for record in records] == [
@@ -333,9 +425,14 @@ def test_redelivered_keyless_task_reuses_same_task_id_without_duplicate(
         count = session.query(Submission).count()
         row = session.query(Submission).filter_by(id=first.result).one()
 
+    task_status = _get_task_status("worker-redelivery-dedup-task-id")
     assert second.result == first.result
     assert count == 1
+    assert _count_task_statuses() == 1
     assert row.idempotency_key == "worker-redelivery-dedup-task-id"
+    assert task_status.status == "processed"
+    assert task_status.submission_id == first.result
+    assert task_status.error_type is None
 
 
 def test_keyless_async_submission_task_uses_task_id_as_idempotency_key(
@@ -361,7 +458,57 @@ def test_keyless_async_submission_task_uses_task_id_as_idempotency_key(
     assert row.idempotency_key == "task-id-123"
 
 
-def test_non_retryable_idempotency_conflict_is_terminal(monkeypatch, caplog):
+def test_record_task_status_failure_does_not_break_task_success(
+    monkeypatch, tmp_path: Path, caplog
+):
+    db_path = tmp_path / "worker_task_status_write_failure.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+
+    def fail_record_task_status(*_args, **_kwargs):
+        raise RuntimeError("status write failed")
+
+    monkeypatch.setattr(worker_tasks, "record_task_status", fail_record_task_status)
+    caplog.set_level(logging.INFO)
+
+    result = worker_tasks.save_async_submission_task.apply(
+        kwargs={
+            "first_name": "StatusFirst",
+            "last_name": "StatusLast",
+            "email": "status-write-failure@example.com",
+        },
+        task_id="worker-status-write-failure-task-id",
+        throw=True,
+    )
+
+    with session_scope() as session:
+        row = session.query(Submission).filter_by(id=result.result).one()
+
+    assert row.idempotency_key == "worker-status-write-failure-task-id"
+    assert _count_task_statuses() == 0
+    records = _worker_records(caplog)
+    status_write_failures = [
+        record for record in records if record.event == "task_status_write_failed"
+    ]
+    assert [record.status for record in status_write_failures] == [
+        "processing",
+        "processed",
+    ]
+    _assert_logs_are_pii_safe(
+        records,
+        "StatusFirst",
+        "StatusLast",
+        "status-write-failure@example.com",
+    )
+
+
+def test_non_retryable_idempotency_conflict_is_terminal(
+    monkeypatch, tmp_path: Path, caplog
+):
+    db_path = tmp_path / "worker_task_idempotency_conflict.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+    worker_tasks._ensure_database_ready()
     monkeypatch.setattr(worker_tasks, "_ensure_database_ready", lambda: None)
     attempts: list[None] = []
 
@@ -391,6 +538,11 @@ def test_non_retryable_idempotency_conflict_is_terminal(monkeypatch, caplog):
     assert isinstance(result.result, IdempotencyConflict)
     assert len(attempts) == 1
     assert get_request_id() is None
+    task_status = _get_task_status("worker-conflict-task-id")
+    assert task_status.status == "conflict"
+    assert task_status.submission_id is None
+    assert task_status.error_type == "IdempotencyConflict"
+    assert task_status.retries == 0
 
     records = _worker_records(caplog)
     assert [record.event for record in records] == [
@@ -438,8 +590,12 @@ def test_save_async_submission_task_replaces_unsafe_request_id(
 
 
 def test_save_async_submission_task_failure_logs_task_context_and_clears_request_id(
-    monkeypatch, caplog
+    monkeypatch, tmp_path: Path, caplog
 ):
+    db_path = tmp_path / "worker_task_runtime_failure.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+    worker_tasks._ensure_database_ready()
     monkeypatch.setattr(worker_tasks, "_ensure_database_ready", lambda: None)
     attempts: list[None] = []
 
@@ -468,6 +624,11 @@ def test_save_async_submission_task_failure_logs_task_context_and_clears_request
     assert isinstance(result.result, RuntimeError)
     assert len(attempts) == 1
     assert get_request_id() is None
+    task_status = _get_task_status("worker-failure-task-id")
+    assert task_status.status == "failed"
+    assert task_status.submission_id is None
+    assert task_status.error_type == "RuntimeError"
+    assert task_status.retries == 2
 
     records = _worker_records(caplog)
     assert [record.event for record in records] == [
