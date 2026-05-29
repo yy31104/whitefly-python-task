@@ -11,6 +11,7 @@ from shared.models import Submission
 from shared.services import (
     IdempotencyConflict,
     create_submission_sync,
+    enqueue_submission_async,
     list_submissions,
     save_submission_from_worker,
 )
@@ -235,6 +236,56 @@ def test_save_submission_from_worker_persists_key_and_async_form_type(service_db
     assert submission.id is not None
     assert row.idempotency_key == "worker-key"
     assert row.form_type == "async"
+
+
+def test_enqueue_submission_async_passes_idempotency_key(monkeypatch):
+    calls: list[dict[str, str]] = []
+
+    class DummyTaskResult:
+        id = "task-service-idempotency"
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+        return DummyTaskResult()
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+
+    task_id = enqueue_submission_async(
+        first_name="Grace",
+        last_name="Hopper",
+        email="service-async-key@example.com",
+        idempotency_key="service-async-key",
+    )
+
+    assert task_id == "task-service-idempotency"
+    assert calls[0]["idempotency_key"] == "service-async-key"
+
+
+def test_enqueue_submission_async_omits_blank_idempotency_key(monkeypatch):
+    calls: list[dict[str, str]] = []
+
+    class DummyTaskResult:
+        id = "task-service-no-idempotency"
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+        return DummyTaskResult()
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+
+    task_id = enqueue_submission_async(
+        first_name="Grace",
+        last_name="Hopper",
+        email="service-no-async-key@example.com",
+        idempotency_key="",
+    )
+
+    assert task_id == "task-service-no-idempotency"
+    assert "idempotency_key" not in calls[0]
 
 
 def test_list_submissions_applies_limit_and_desc_order(tmp_path):

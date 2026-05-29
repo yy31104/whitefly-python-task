@@ -1,10 +1,31 @@
 from __future__ import annotations
 
-from flask import Blueprint, abort, current_app, flash, make_response, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from flask_app.app.forms import extract_async_form_data, extract_sync_form_data
-from shared.rate_limit import RateLimitExceeded, enforce_rate_limit, trusted_client_identifier
-from shared.services import QueueUnavailable, create_submission_sync, enqueue_submission_async, list_submissions
+from shared.idempotency import generate_idempotency_key, resolve_idempotency_key
+from shared.rate_limit import (
+    RateLimitExceeded,
+    enforce_rate_limit,
+    trusted_client_identifier,
+)
+from shared.services import (
+    IdempotencyConflict,
+    QueueUnavailable,
+    create_submission_sync,
+    enqueue_submission_async,
+    list_submissions,
+)
 from shared.validation import ValidationError
 
 bp = Blueprint("main", __name__)
@@ -28,10 +49,22 @@ def _client_identifier() -> str:
     )
 
 
+def _request_idempotency_key() -> str | None:
+    return resolve_idempotency_key(
+        header=request.headers.get("Idempotency-Key"),
+        form=request.form.get("idempotency_key"),
+    )
+
+
+def _fresh_form_idempotency_key() -> str:
+    return generate_idempotency_key()
+
+
 @bp.route("/sync-form", methods=["GET", "POST"])
 def sync_form():
     if request.method == "POST":
         form_data = extract_sync_form_data(request.form)
+        idempotency_key = _request_idempotency_key()
         try:
             enforce_rate_limit(
                 identifier=_client_identifier(),
@@ -40,26 +73,55 @@ def sync_form():
                 window_seconds=current_app.config["RATE_LIMIT_WINDOW_SECONDS"],
                 redis_url=current_app.config.get("REDIS_URL"),
             )
-            create_submission_sync(**form_data)
+            create_submission_sync(**form_data, idempotency_key=idempotency_key)
         except RateLimitExceeded as exc:
             flash(str(exc), "error")
-            response = make_response(render_template("sync_form.html", form_data=form_data), 429)
+            response = make_response(
+                render_template(
+                    "sync_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                429,
+            )
             response.headers["Retry-After"] = str(exc.retry_after)
             return response
+        except IdempotencyConflict:
+            flash("Submission conflicts with a previous idempotency key.", "error")
+            return (
+                render_template(
+                    "sync_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                409,
+            )
         except ValidationError as exc:
             flash(str(exc), "error")
-            return render_template("sync_form.html", form_data=form_data), 400
+            return (
+                render_template(
+                    "sync_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                400,
+            )
 
         flash("Submission saved.", "success")
         return redirect(url_for("main.submissions"))
 
-    return render_template("sync_form.html", form_data={})
+    return render_template(
+        "sync_form.html",
+        form_data={},
+        idempotency_key=_fresh_form_idempotency_key(),
+    )
 
 
 @bp.route("/async-form", methods=["GET", "POST"])
 def async_form():
     if request.method == "POST":
         form_data = extract_async_form_data(request.form)
+        idempotency_key = _request_idempotency_key()
         try:
             enforce_rate_limit(
                 identifier=_client_identifier(),
@@ -68,23 +130,51 @@ def async_form():
                 window_seconds=current_app.config["RATE_LIMIT_WINDOW_SECONDS"],
                 redis_url=current_app.config.get("REDIS_URL"),
             )
-            task_id = enqueue_submission_async(**form_data)
+            task_id = enqueue_submission_async(
+                **form_data,
+                idempotency_key=idempotency_key,
+            )
         except RateLimitExceeded as exc:
             flash(str(exc), "error")
-            response = make_response(render_template("async_form.html", form_data=form_data), 429)
+            response = make_response(
+                render_template(
+                    "async_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                429,
+            )
             response.headers["Retry-After"] = str(exc.retry_after)
             return response
         except QueueUnavailable as exc:
             flash(str(exc), "error")
-            return render_template("async_form.html", form_data=form_data), 503
+            return (
+                render_template(
+                    "async_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                503,
+            )
         except ValidationError as exc:
             flash(str(exc), "error")
-            return render_template("async_form.html", form_data=form_data), 400
+            return (
+                render_template(
+                    "async_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                400,
+            )
 
         flash(f"Submission queued. Task ID: {task_id}", "success")
         return redirect(url_for("main.async_form"))
 
-    return render_template("async_form.html", form_data={})
+    return render_template(
+        "async_form.html",
+        form_data={},
+        idempotency_key=_fresh_form_idempotency_key(),
+    )
 
 
 @bp.get("/submissions")

@@ -92,6 +92,62 @@ def test_save_async_submission_task_accepts_missing_request_id(
     assert all(record.task_name == "worker.save_async_submission" for record in records)
 
 
+def test_save_async_submission_task_persists_idempotency_key(
+    monkeypatch, tmp_path: Path
+):
+    db_path = tmp_path / "worker_task_idempotency_key.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+
+    result = worker_tasks.save_async_submission_task.apply(
+        kwargs={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "worker-idempotency@example.com",
+            "idempotency_key": "worker-idempotency-key",
+        },
+        task_id="worker-idempotency-task-id",
+        throw=True,
+    )
+
+    with session_scope() as session:
+        row = session.query(Submission).filter_by(id=result.result).one()
+
+    assert row.idempotency_key == "worker-idempotency-key"
+    assert row.form_type == "async"
+
+
+def test_save_async_submission_task_reuses_same_idempotency_key(
+    monkeypatch, tmp_path: Path
+):
+    db_path = tmp_path / "worker_task_idempotency_reuse.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setattr(worker_tasks, "_db_ready", False)
+    kwargs = {
+        "first_name": "Grace",
+        "last_name": "Hopper",
+        "email": "worker-idempotency-reuse@example.com",
+        "idempotency_key": "worker-idempotency-reuse-key",
+    }
+
+    first = worker_tasks.save_async_submission_task.apply(
+        kwargs=kwargs,
+        task_id="worker-idempotency-reuse-task-1",
+        throw=True,
+    )
+    second = worker_tasks.save_async_submission_task.apply(
+        kwargs=kwargs,
+        task_id="worker-idempotency-reuse-task-2",
+        throw=True,
+    )
+
+    with session_scope() as session:
+        count = session.query(Submission).count()
+
+    assert second.result == first.result
+    assert count == 1
+
+
 def test_save_async_submission_task_replaces_unsafe_request_id(
     monkeypatch, tmp_path: Path, caplog
 ):

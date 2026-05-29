@@ -189,6 +189,8 @@ def enqueue_submission_async(
     last_name: str,
     email: str,
     honeypot: str = "",
+    *,
+    idempotency_key: str | None = None,
 ) -> str:
     validated = validate_submission_data(first_name, last_name, email, honeypot)
 
@@ -203,6 +205,8 @@ def enqueue_submission_async(
     request_id = get_request_id()
     if request_id:
         task_kwargs["request_id"] = request_id
+    if idempotency_key:
+        task_kwargs["idempotency_key"] = idempotency_key
 
     try:
         task = save_async_submission_task.delay(**task_kwargs)

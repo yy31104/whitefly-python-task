@@ -21,6 +21,8 @@
   {% endif %}
 
   <form method="post" action="{{ request.url_for('sync_form_post') }}" novalidate>
+    <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+
     <label for="first_name">First name</label><br>
     <input id="first_name" name="first_name" type="text" value="{{ form_data.get('first_name', '') }}" required><br><br>
 

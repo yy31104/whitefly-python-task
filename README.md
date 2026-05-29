@@ -66,7 +66,7 @@ docker compose exec flask_app alembic stamp head
 
 This PR does not auto-run Alembic yet.
 
-The `idempotency_key` schema now exists on submissions. Service-layer deduplication, an HTTP `Idempotency-Key` contract, async task propagation, and Celery retry behavior are future PRs.
+The `idempotency_key` schema now exists on submissions. Browser form submissions include a hidden idempotency key, and API clients may send an `Idempotency-Key` header. The header wins over the form field; bad or blank keys are ignored and behave like no key. Sync conflicts return `409`; async conflicts currently surface as structured worker failure logs until task status exists. Celery retry remains disabled.
 
 ## Running with Docker Compose
 ```powershell
