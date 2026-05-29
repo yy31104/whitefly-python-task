@@ -20,6 +20,11 @@ from shared.services import (
     enqueue_submission_async,
     list_submissions,
 )
+from shared.task_status import (
+    get_task_status,
+    sanitize_task_id,
+    serialize_task_status,
+)
 from shared.validation import ValidationError
 
 router = APIRouter()
@@ -221,6 +226,19 @@ async def async_form_post(
     return _redirect_with_message(
         request, "async_form_get", f"Submission queued. Task ID: {task_id}"
     )
+
+
+@router.get("/async-status/{task_id}")
+async def async_status(task_id: str) -> dict:
+    sanitized_task_id = sanitize_task_id(task_id)
+    if sanitized_task_id is None:
+        raise HTTPException(status_code=400, detail="Invalid task id.")
+
+    task_status = get_task_status(sanitized_task_id)
+    if task_status is None:
+        raise HTTPException(status_code=404, detail="Task status not found.")
+
+    return serialize_task_status(task_status)
 
 
 @router.get("/submissions", response_class=HTMLResponse)

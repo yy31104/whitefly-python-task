@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
@@ -9,6 +10,17 @@ from shared.db import session_scope
 from shared.models import TaskStatus
 
 logger = logging.getLogger(__name__)
+_TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
+
+
+def sanitize_task_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    if not _TASK_ID_PATTERN.fullmatch(value):
+        return None
+    return value
 
 
 def mark_task_queued(task_id: str) -> None:
@@ -80,6 +92,23 @@ def record_task_status(
                 session.commit()
     except Exception as exc:
         _log_status_write_failed(task_id, status, exc)
+
+
+def get_task_status(task_id: str) -> TaskStatus | None:
+    with session_scope() as session:
+        return _find_task_status(session, task_id)
+
+
+def serialize_task_status(task_status: TaskStatus) -> dict:
+    return {
+        "task_id": task_status.task_id,
+        "status": task_status.status,
+        "submission_id": task_status.submission_id,
+        "error_type": task_status.error_type,
+        "retries": task_status.retries,
+        "created_at": task_status.created_at.isoformat(),
+        "updated_at": task_status.updated_at.isoformat(),
+    }
 
 
 def _find_task_status(session, task_id: str) -> TaskStatus | None:

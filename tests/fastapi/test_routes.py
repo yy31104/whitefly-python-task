@@ -13,6 +13,7 @@ from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
 from shared.services import QueueUnavailable
+from shared.task_status import mark_task_queued, record_task_status
 
 _IDEMPOTENCY_FIELD_RE = re.compile(r'name="idempotency_key" value="([^"]+)"')
 
@@ -43,6 +44,23 @@ def _extract_hidden_idempotency_key(response) -> str:
     match = _IDEMPOTENCY_FIELD_RE.search(response.text)
     assert match is not None
     return match.group(1)
+
+
+def _assert_async_status_payload(payload: dict, *, task_id: str, status: str) -> None:
+    assert payload["task_id"] == task_id
+    assert payload["status"] == status
+    assert set(payload) == {
+        "task_id",
+        "status",
+        "submission_id",
+        "error_type",
+        "retries",
+        "created_at",
+        "updated_at",
+    }
+    assert isinstance(payload["retries"], int)
+    assert isinstance(payload["created_at"], str)
+    assert isinstance(payload["updated_at"], str)
 
 
 def test_home_page(client: TestClient):
@@ -371,6 +389,100 @@ def test_valid_async_post_queues_task(
         }
     ]
     assert _count_submissions() == 0
+
+
+def test_async_status_returns_queued_json_without_pii(client: TestClient):
+    mark_task_queued("fastapi-task-queued")
+
+    response = client.get("/async-status/fastapi-task-queued")
+
+    assert response.status_code == 200
+    assert "application/json" in response.headers["content-type"]
+    payload = response.json()
+    _assert_async_status_payload(
+        payload,
+        task_id="fastapi-task-queued",
+        status="queued",
+    )
+    assert payload["submission_id"] is None
+    assert payload["error_type"] is None
+    assert "Ada" not in response.text
+    assert "Lovelace" not in response.text
+    assert "ada@example.com" not in response.text
+    assert "payload" not in response.text
+
+
+def test_async_status_returns_processed_json(client: TestClient):
+    record_task_status(
+        "fastapi-task-processed",
+        "processed",
+        submission_id=123,
+        retries=1,
+    )
+
+    response = client.get("/async-status/fastapi-task-processed")
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_async_status_payload(
+        payload,
+        task_id="fastapi-task-processed",
+        status="processed",
+    )
+    assert payload["submission_id"] == 123
+    assert payload["error_type"] is None
+    assert payload["retries"] == 1
+
+
+def test_async_status_returns_conflict_json(client: TestClient):
+    record_task_status(
+        "fastapi-task-conflict",
+        "conflict",
+        error_type="IdempotencyConflict",
+        retries=0,
+    )
+
+    response = client.get("/async-status/fastapi-task-conflict")
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_async_status_payload(
+        payload,
+        task_id="fastapi-task-conflict",
+        status="conflict",
+    )
+    assert payload["submission_id"] is None
+    assert payload["error_type"] == "IdempotencyConflict"
+
+
+def test_async_status_unknown_task_returns_404_json(client: TestClient):
+    response = client.get("/async-status/fastapi-task-missing")
+
+    assert response.status_code == 404
+    assert "application/json" in response.headers["content-type"]
+    assert response.json() == {"detail": "Task status not found."}
+
+
+def test_async_status_malformed_task_id_returns_400_json(client: TestClient):
+    response = client.get("/async-status/bad%20task")
+
+    assert response.status_code == 400
+    assert "application/json" in response.headers["content-type"]
+    assert response.json() == {"detail": "Invalid task id."}
+
+
+def test_async_status_route_works_with_fastapi_prefix(tmp_path):
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_prefixed_status.db').as_posix()}",
+        url_prefix="/fastapi",
+    )
+    mark_task_queued("fastapi-prefix-task")
+
+    with TestClient(app) as prefixed_client:
+        response = prefixed_client.get("/fastapi/async-status/fastapi-prefix-task")
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == "fastapi-prefix-task"
 
 
 def test_form_post_logs_request_id_without_raw_pii(
