@@ -1,21 +1,34 @@
 # whitefly-python-task
 
 ## Project Overview
-Backend recruitment assignment implemented with Flask and FastAPI parity, shared data/service layers, async processing, reverse proxy routing, load testing, and practical anti-bot protections.
+
+Backend recruitment assignment implemented with Flask and FastAPI parity, shared data/service layers, async processing, reverse proxy routing, load testing, anti-bot protections, and production-style reliability patterns.
+
+The project now works as a compact backend reliability lab: one simple submission workflow, hardened through observability, migrations, idempotency, bounded retry, duplicate-safe redelivery, durable task status, read-only status APIs, and minimal UI polling.
 
 ## Architecture
+
 - Public entrypoint: Nginx on `localhost:8080`
 - App services: Flask + FastAPI
 - Async processing: Celery worker
 - Broker: Redis
-- Database: PostgreSQL (Compose runtime), SQLite fallback for local/simple runs
-- Shared domain layer: SQLAlchemy models, validation, service logic
+- Database: PostgreSQL in Docker Compose, SQLite fallback for local/simple runs
+- Shared domain layer: SQLAlchemy models, validation, service logic, idempotency, task status
 
 Routing behind Nginx:
 - `http://localhost:8080/flask/...` -> Flask service
 - `http://localhost:8080/fastapi/...` -> FastAPI service
 
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Reliability design](docs/RELIABILITY.md)
+- [Demo script](docs/DEMO.md)
+- [Limitations and playbook](docs/LIMITATIONS.md)
+- [Interview notes](docs/INTERVIEW_NOTES.md)
+
 ## Tech Stack
+
 - Python 3.11
 - Flask, FastAPI, Jinja2
 - SQLAlchemy
@@ -27,48 +40,88 @@ Routing behind Nginx:
 - k6
 
 ## Features
+
 - Flask sync form: validate then persist directly.
 - Flask async form: validate then enqueue Celery task.
 - FastAPI sync form: same behavior as Flask sync.
 - FastAPI async form: same behavior as Flask async.
 - Shared service and validation layer used by both frameworks.
 - Shared worker persistence path (`form_type="async"`, `status="processed"`).
-- Shared Redis-backed rate limiter with `429 + Retry-After`.
+- Redis-backed rate limiter with memory fallback.
 - Honeypot and server-side validation hardening.
+- Async task status JSON endpoints and browser polling.
+
+## Reliability Summary
+
+The reliability work is documented in detail in [Architecture](docs/ARCHITECTURE.md) and [Reliability design](docs/RELIABILITY.md).
+
+Highlights:
+- Safe `X-Request-ID` propagation across nginx, Flask, FastAPI, and Celery.
+- JSON structured logs with PII-safe fields.
+- Alembic baseline migrations for schema evolution.
+- HTTP and service-layer idempotency.
+- Bounded retry for transient SQLAlchemy `OperationalError`.
+- Duplicate-safe `acks_late=True` and `reject_on_worker_lost=True`.
+- Durable `task_statuses` table for async lifecycle visibility.
+- Read-only task status APIs and minimal vanilla-JS polling on async forms.
+
+## PR Timeline
+
+| PR | Capability added |
+| --- | --- |
+| #1 | Request IDs and JSON structured logging across nginx, Flask, FastAPI, and worker |
+| #2 | FastAPI unhandled 500 responses preserve safe `X-Request-ID` |
+| #3 | Worker failure visibility with task id, retries, task name, and error type |
+| #4 | SQLAlchemy `hide_parameters=True` and PII-safe logging regression coverage |
+| #5 | Alembic baseline migrations |
+| #6 | Nullable unique `Submission.idempotency_key` schema |
+| #7 | Service-layer idempotent persistence |
+| #8 | HTTP `Idempotency-Key` contract and async idempotency propagation |
+| #9 | Bounded retry for transient SQLAlchemy `OperationalError` |
+| #10 | Duplicate-safe late ack and worker-lost redelivery |
+| #11 | Durable async task status recording in `task_statuses` |
+| #12 | Read-only JSON async task status endpoints |
+| #13 | Minimal async status UI polling |
 
 ## Running Locally
+
 Install dependencies and run tests:
+
 ```powershell
 .\.venv\Scripts\python -m pip install -r requirements\dev.txt
 .\.venv\Scripts\python -m pytest -q
 ```
 
 Run Flask:
+
 ```powershell
 .\.venv\Scripts\python -m flask --app flask_app.app run --debug
 ```
 
 Run FastAPI:
+
 ```powershell
 .\.venv\Scripts\python -m uvicorn fastapi_app.app.main:app --reload --port 8000
 ```
 
 ## Database Migrations
-Alembic is configured under `migrations/` with a baseline migration for the current `submissions` table. For a fresh database, run migrations before first app startup:
+
+Alembic is configured under `migrations/`. For a fresh database, run migrations before first app startup:
+
 ```powershell
 .\.venv\Scripts\alembic upgrade head
 ```
 
-The baseline matches the schema that the app currently creates with SQLAlchemy metadata. If the app already created the current schema with `create_all`, mark the database as current before future migrations:
+The baseline matches the schema that the app can create with SQLAlchemy metadata. If the app already created the current schema with `create_all`, mark the database as current before future migrations:
+
 ```powershell
 docker compose exec flask_app alembic stamp head
 ```
 
-This PR does not auto-run Alembic yet.
+Alembic is not auto-run.
 
-The `idempotency_key` schema now exists on submissions. Browser form submissions include a hidden idempotency key, and API clients may send an `Idempotency-Key` header. The header wins over the form field; bad or blank keys are ignored and behave like no key. Sync conflicts return `409`; async conflicts currently surface as structured worker failure logs until task status exists.
+## Running With Docker Compose
 
-## Running with Docker Compose
 ```powershell
 Copy-Item .env.example .env -Force
 docker compose up -d --build
@@ -80,72 +133,84 @@ Main URLs:
 - FastAPI: `http://localhost:8080/fastapi/`
 
 Useful logs:
+
 ```powershell
 docker compose logs -f
 docker compose logs -f worker
 docker compose logs -f nginx
 ```
 
-## Request IDs and Logs
-Flask, FastAPI, nginx, and the Celery worker write JSON logs with a `request_id` field. The apps echo `X-Request-ID` on every response; if a caller omits it, the edge/app generates one.
+Health check status:
 
-Example trace with a caller-supplied ID:
-```powershell
-curl.exe -i -H "X-Request-ID: demo-trace-001" -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" http://localhost:8080/flask/async-form
-docker compose logs nginx flask_app worker | Select-String demo-trace-001
-```
-
-For requests without `X-Request-ID`, nginx stamps one; copy the response header value and search the nginx, app, and worker logs for that ID.
-
-Async worker failures are visible in structured worker logs with `request_id`, `task_id`, `task_name`, `retries`, and `error_type`. The worker retries transient SQLAlchemy `OperationalError` only, with max retries `3`, exponential backoff, and jitter. `acks_late=True` and `reject_on_worker_lost=True` are enabled for the async worker task. If a worker is lost after DB commit but before ack, broker redelivery re-runs the same task id and dedups via the effective idempotency key. Keyless async tasks use the Celery `task_id` as the effective idempotency key, so retries or redeliveries converge on one row. `IdempotencyConflict`, `ValidationError`, `IntegrityError`, and unexpected errors are terminal: they are acked and logged, not looped forever. A terminal `async_submission_task_failed` log with `retries` at `max_retries` is the current exhausted/dead signal. With the Redis broker, hard-crash redelivery may be delayed by the broker visibility timeout rather than immediate.
-
-Async task lifecycle is recorded in the dedicated `task_statuses` table, not the Celery result backend (`task_ignore_result=True` remains set). Recorded states are `queued`, `processing`, `retrying`, `processed`, `failed`, and `conflict`; `conflict` represents an async `IdempotencyConflict`. Status writes are best-effort and eventually consistent, so enqueue and worker processing are not failed by status-recording errors. A status endpoint and UI polling remain future PRs, along with a real dead-letter queue.
-
-Read-only JSON task status is exposed at `/flask/async-status/<task_id>` and `/fastapi/async-status/{task_id}`. A found task returns `200` with `task_id`, `status`, `submission_id`, `error_type`, `retries`, `created_at`, and `updated_at`; malformed task ids return `400`, and well-formed missing task ids return `404`. A `404` immediately after enqueue can mean the best-effort status write has not landed yet, so clients may poll again. Responses include no submission names, emails, or form payloads, and the endpoint stays enabled independently of the submissions page. UI polling remains a future PR.
-
-The async form pages use small inline vanilla JavaScript to poll task status every 2 seconds after a queued submission. The UI copy maps states to `Queued…`, `Processing…`, `Retrying after a temporary error…`, `Processed ✓`, `Failed. Please try again.`, and `Already received as a duplicate.` Terminal states stop polling, and polling caps after about 60 seconds. A fresh `404` is treated as not recorded yet, so polling continues. The status UI contains no PII. Inline JS is used because the project does not yet have a CSP/static-JS setup; the polling behavior is manually verifiable and has no JS test harness in this PR.
-
-Health check status (explicit container names used in this project):
 ```powershell
 docker inspect --format "{{json .State.Health.Status}}" whitefly-flask
 docker inspect --format "{{json .State.Health.Status}}" whitefly-fastapi
 ```
 
-Portable alternative (resolve IDs first):
-```powershell
-docker compose ps
-docker inspect --format "{{json .State.Health.Status}}" (docker compose ps -q flask_app)
-docker inspect --format "{{json .State.Health.Status}}" (docker compose ps -q fastapi_app)
-```
-
 Stop:
+
 ```powershell
 docker compose down
 ```
 
+## Request IDs And Logs
+
+Flask, FastAPI, nginx, and the Celery worker write JSON logs with a `request_id` field. The apps echo `X-Request-ID` on every response; if a caller omits it, the edge/app generates one.
+
+Example trace with a caller-supplied ID:
+
+```powershell
+curl.exe -i -H "X-Request-ID: demo-trace-001" -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" http://localhost:8080/flask/async-form
+docker compose logs nginx flask_app worker | Select-String demo-trace-001
+```
+
+## Async Status
+
+Async task lifecycle is recorded in the `task_statuses` table with these states:
+- `queued`
+- `processing`
+- `retrying`
+- `processed`
+- `failed`
+- `conflict`
+
+Read-only JSON status endpoints:
+- `GET /flask/async-status/<task_id>`
+- `GET /fastapi/async-status/{task_id}`
+
+Async form pages poll the status endpoint every two seconds after enqueue, stop on terminal states, and cap after about 60 seconds. Status responses and the polling UI do not expose names, emails, or form payloads.
+
 ## Testing
+
 Full suite:
+
 ```powershell
 .\.venv\Scripts\python -m pytest -q
 ```
 
-Current test status: `49 passed`
+The pytest suite currently passes with 140+ tests.
 
 Coverage includes:
-- Flask/FastAPI route behavior (sync/async, validation, rate-limit, security toggles)
-- Worker persistence path
-- Shared validation edge cases
-- Rate-limit fallback behavior
-- Trusted client IP extraction behavior
+- Flask/FastAPI route behavior
+- request IDs and structured logging
+- idempotency and conflict behavior
+- migration parity
+- worker retry/redelivery behavior
+- async task status recording and read endpoints
+- rate-limit fallback behavior
+- trusted client IP extraction behavior
 
 ## Load Testing
-Run locally (if `k6` installed):
+
+Run locally if `k6` is installed:
+
 ```powershell
 k6 run load_tests/sync_form.js
 k6 run load_tests/async_form.js
 ```
 
 Docker fallback:
+
 ```powershell
 docker run --rm --network whitefly-python-task_default -e BASE_URL=http://nginx/flask -v ${PWD}/load_tests:/scripts grafana/k6 run /scripts/sync_form.js
 docker run --rm --network whitefly-python-task_default -e BASE_URL=http://nginx/fastapi -v ${PWD}/load_tests:/scripts grafana/k6 run /scripts/async_form.js
@@ -157,13 +222,14 @@ Latest sample summary:
 - Both scripts met thresholds (`http_req_failed < 5%`, `p(95) < 1000ms`)
 - Async endpoint is faster because it validates and queues work immediately; persistence runs later in the Celery worker.
 
-## Security and Reliability Improvements
+## Security And Reliability Improvements
+
 - Production secret handling:
   - `APP_ENV=production` requires explicit `SECRET_KEY`; startup fails fast if missing.
 - Production submissions-page restriction:
   - `/submissions` is disabled by default in production (`ENABLE_SUBMISSIONS_PAGE=false`).
 - Async broker failure behavior:
-  - queue publish failures are converted to controlled `503` responses with user-friendly feedback (not generic `500`).
+  - queue publish failures are converted to controlled `503` responses with user-friendly feedback.
 - Trusted proxy / client IP handling:
   - Nginx forwards normalized client IP headers.
   - App layer prefers `X-Real-IP` and uses a shared trusted-identifier helper for rate limiting.
@@ -176,11 +242,11 @@ Latest sample summary:
   - honeypot is validated before deeper field validation.
 
 ## Future Improvements
-- Richer async failure handling:
-  - add a task status endpoint, UI polling, and dead-letter handling.
-- Stronger admin/auth protection:
-  - protect internal pages (such as submissions) with robust authentication/authorization.
-- Richer async lifecycle:
-  - model and expose `queued -> processing -> processed/failed` job status transitions.
-- Fingerprint-based anti-bot expansion:
-  - add fingerprint signal (for example FingerprintJS) to complement IP-based controls.
+
+- Add a real dead-letter/failure queue and triage workflow.
+- Add auth for internal status and submissions surfaces.
+- Add metrics and tracing backend integration.
+- Add CSP/static-JS setup instead of inline polling JavaScript.
+- Add GET rate limiting for status polling.
+- Harden production deployment and operational runbooks.
+- Expand fingerprint-based anti-bot signals.
