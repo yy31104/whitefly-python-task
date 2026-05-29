@@ -147,6 +147,7 @@ def test_async_form_get(client):
     response = client.get("/async-form")
     assert response.status_code == 200
     assert b"Async Submission Form" in response.data
+    assert b'id="async-status"' not in response.data
 
 
 def test_async_form_get_renders_hidden_idempotency_key(client):
@@ -295,6 +296,12 @@ def test_valid_async_post_queues_task(client, monkeypatch):
 
     assert response.status_code == 200
     assert b"Submission queued. Task ID: task-123" in response.data
+    body = response.get_data(as_text=True)
+    assert 'id="async-status"' in body
+    assert 'data-status-url="/async-status/task-123"' in body
+    assert "Grace" not in body
+    assert "Hopper" not in body
+    assert "grace@example.com" not in body
     assert calls == [
         {
             "first_name": "Grace",
@@ -304,6 +311,37 @@ def test_valid_async_post_queues_task(client, monkeypatch):
         }
     ]
     assert _count_submissions() == 0
+
+
+def test_async_form_malformed_task_id_renders_no_status_region(client):
+    response = client.get("/async-form?task_id=bad%20task%20SECRET_KEY")
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="async-status"' not in body
+    assert "bad task SECRET_KEY" not in body
+    assert "SECRET_KEY" not in body
+
+
+def test_async_form_status_region_uses_flask_prefix(tmp_path):
+    db_path = tmp_path / "flask_prefixed_polling.db"
+    prefixed_app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret",
+            "DATABASE_URL": f"sqlite:///{db_path.as_posix()}",
+            "FLASK_URL_PREFIX": "/flask",
+        }
+    )
+
+    response = prefixed_app.test_client().get(
+        "/flask/async-form?task_id=flask-prefix-poll-task"
+    )
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="async-status"' in body
+    assert 'data-status-url="/flask/async-status/flask-prefix-poll-task"' in body
 
 
 def test_async_post_with_idempotency_key_passes_key_to_task(client, monkeypatch):

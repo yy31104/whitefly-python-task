@@ -146,6 +146,7 @@ def test_async_form_get(client: TestClient):
     response = client.get("/async-form")
     assert response.status_code == 200
     assert "Async Submission Form" in response.text
+    assert 'id="async-status"' not in response.text
 
 
 def test_async_form_get_renders_hidden_idempotency_key(client: TestClient):
@@ -380,6 +381,11 @@ def test_valid_async_post_queues_task(
 
     assert response.status_code == 200
     assert "Submission queued. Task ID: task-fastapi-123" in response.text
+    assert 'id="async-status"' in response.text
+    assert "/async-status/task-fastapi-123" in response.text
+    assert "Grace" not in response.text
+    assert "Hopper" not in response.text
+    assert "grace@example.com" not in response.text
     assert calls == [
         {
             "first_name": "Grace",
@@ -389,6 +395,31 @@ def test_valid_async_post_queues_task(
         }
     ]
     assert _count_submissions() == 0
+
+
+def test_async_form_malformed_task_id_renders_no_status_region(client: TestClient):
+    response = client.get("/async-form?task_id=bad%20task%20SECRET_KEY")
+
+    assert response.status_code == 200
+    assert 'id="async-status"' not in response.text
+    assert "bad task SECRET_KEY" not in response.text
+    assert "SECRET_KEY" not in response.text
+
+
+def test_async_form_status_region_uses_fastapi_prefix(tmp_path):
+    app = create_app(
+        database_url=f"sqlite:///{(tmp_path / 'fastapi_prefixed_polling.db').as_posix()}",
+        url_prefix="/fastapi",
+    )
+
+    with TestClient(app) as prefixed_client:
+        response = prefixed_client.get(
+            "/fastapi/async-form?task_id=fastapi-prefix-poll-task"
+        )
+
+    assert response.status_code == 200
+    assert 'id="async-status"' in response.text
+    assert "/fastapi/async-status/fastapi-prefix-poll-task" in response.text
 
 
 def test_async_status_returns_queued_json_without_pii(client: TestClient):

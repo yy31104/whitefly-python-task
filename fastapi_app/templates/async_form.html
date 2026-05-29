@@ -39,5 +39,108 @@
 
     <button type="submit">Queue submission</button>
   </form>
+
+  {% if task_id %}
+    <div id="async-status" data-status-url="{{ request.url_for('async_status', task_id=task_id) }}">
+      <p>Submission status: <span id="async-status-text" aria-live="polite">checking…</span></p>
+    </div>
+    <script>
+      (function () {
+        var container = document.getElementById("async-status");
+        var text = document.getElementById("async-status-text");
+        if (!container || !text) {
+          return;
+        }
+
+        var url = container.getAttribute("data-status-url");
+        var attempts = 0;
+        var maxAttempts = 30;
+        var sawReachableStatus = false;
+
+        function setStatus(message, className) {
+          text.textContent = message;
+          text.className = className || "";
+        }
+
+        function finishCapped() {
+          if (sawReachableStatus) {
+            setStatus("Still processing — check the submissions page later.");
+          } else {
+            setStatus("Status unavailable right now.", "error");
+          }
+        }
+
+        function scheduleNext() {
+          if (attempts >= maxAttempts) {
+            finishCapped();
+            return;
+          }
+          window.setTimeout(poll, 2000);
+        }
+
+        function handleStatus(payload) {
+          var status = payload.status;
+          if (status === "queued") {
+            setStatus("Queued…");
+            return false;
+          }
+          if (status === "processing") {
+            setStatus("Processing…");
+            return false;
+          }
+          if (status === "retrying") {
+            setStatus("Retrying after a temporary error…");
+            return false;
+          }
+          if (status === "processed") {
+            setStatus("Processed ✓", "success");
+            return true;
+          }
+          if (status === "failed") {
+            setStatus("Failed. Please try again.", "error");
+            return true;
+          }
+          if (status === "conflict") {
+            setStatus("Already received as a duplicate.", "error");
+            return true;
+          }
+          setStatus("Processing…");
+          return false;
+        }
+
+        function poll() {
+          attempts += 1;
+          window.fetch(url, { headers: { "Accept": "application/json" } })
+            .then(function (response) {
+              if (response.status === 404) {
+                sawReachableStatus = true;
+                setStatus("Queued…");
+                scheduleNext();
+                return null;
+              }
+              if (response.status !== 200) {
+                scheduleNext();
+                return null;
+              }
+              sawReachableStatus = true;
+              return response.json();
+            })
+            .then(function (payload) {
+              if (!payload) {
+                return;
+              }
+              if (!handleStatus(payload)) {
+                scheduleNext();
+              }
+            })
+            .catch(function () {
+              scheduleNext();
+            });
+        }
+
+        poll();
+      }());
+    </script>
+  {% endif %}
 </body>
 </html>
