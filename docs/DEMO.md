@@ -172,7 +172,7 @@ docker run --rm --network whitefly-python-task_default \
   grafana/k6 run /scripts/async_form.js
 ```
 
-Historical figures from the old README are kept in [development records](../devlog/README.original.md). Their [configuration context](../devlog/LOAD_TEST_CONTEXT.md) explains why they are absent from the current project overview.
+The default limit is 20 form submissions per minute per IP. Use the configured limits when interpreting load-test results; the summary above prints errors as well as latency.
 
 ## Shut down
 
