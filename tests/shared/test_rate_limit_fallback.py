@@ -4,7 +4,7 @@ import logging
 
 from redis.exceptions import RedisError
 
-import shared.rate_limit as rate_limit
+from shared import rate_limit
 
 
 def test_rate_limit_logs_warning_when_falling_back_to_memory(caplog, monkeypatch):
@@ -28,5 +28,6 @@ def test_rate_limit_logs_warning_when_falling_back_to_memory(caplog, monkeypatch
         )
 
     assert any(
-        "Rate limiter fallback to in-memory store:" in record.message for record in caplog.records
+        "Rate limiter fallback to in-memory store:" in record.message
+        for record in caplog.records
     )

@@ -217,7 +217,7 @@ def enqueue_submission_async(
         ) from exc
     try:
         mark_task_queued(task.id)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - best-effort status writes
         logger.warning(
             "task status write failed",
             extra={

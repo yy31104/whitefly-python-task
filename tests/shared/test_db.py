@@ -63,9 +63,8 @@ def test_db_error_rendering_hides_bound_parameters():
     }
 
     try:
-        with engine.connect() as connection:
-            with pytest.raises(SQLAlchemyError) as exc_info:
-                connection.execute(statement, params)
+        with engine.connect() as connection, pytest.raises(SQLAlchemyError) as exc_info:
+            connection.execute(statement, params)
     finally:
         engine.dispose()
 

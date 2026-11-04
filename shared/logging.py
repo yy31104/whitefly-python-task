@@ -6,8 +6,8 @@ import logging
 import re
 import sys
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -47,13 +47,11 @@ def clear_request_id() -> None:
 
 
 class JsonLineFormatter(logging.Formatter):
-    _reserved_attrs = set(logging.makeLogRecord({}).__dict__)
+    _reserved_attrs: ClassVar[set[str]] = set(logging.makeLogRecord({}).__dict__)
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

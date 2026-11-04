@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from shared.validation import ValidationError, validate_email_address, validate_name, validate_submission_payload
+from shared.validation import (
+    ValidationError,
+    validate_email_address,
+    validate_name,
+    validate_submission_payload,
+)
 
 
 def test_validate_submission_payload_checks_honeypot_first():
@@ -43,5 +48,7 @@ def test_validate_email_address_rejects_255_character_email():
 
 
 def test_validate_email_address_rejects_disposable_domain():
-    with pytest.raises(ValidationError, match="Disposable email addresses are not allowed"):
+    with pytest.raises(
+        ValidationError, match="Disposable email addresses are not allowed"
+    ):
         validate_email_address("user@mailinator.com")

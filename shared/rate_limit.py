@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 class RateLimitExceeded(Exception):
     def __init__(self, retry_after: int) -> None:
         self.retry_after = max(1, retry_after)
-        super().__init__(f"Too many requests. Please retry in {self.retry_after} seconds.")
+        super().__init__(
+            f"Too many requests. Please retry in {self.retry_after} seconds."
+        )
 
 
 def _warn_memory_fallback(message: str) -> None:
@@ -128,7 +130,6 @@ def enforce_rate_limit(
             return
         except RedisError:
             _warn_memory_fallback("Redis command failed during rate-limit check.")
-            pass
 
     now = time.time()
     with _memory_lock:

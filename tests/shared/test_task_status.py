@@ -9,6 +9,8 @@ from shared.db import init_database, session_scope
 from shared.models import TaskStatus
 from shared.task_status import (
     get_task_status as read_task_status,
+)
+from shared.task_status import (
     mark_task_queued,
     record_task_status,
     sanitize_task_id,

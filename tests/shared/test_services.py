@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -334,7 +334,7 @@ def test_list_submissions_applies_limit_and_desc_order(tmp_path):
     db_path = tmp_path / "services_limit.db"
     init_database(f"sqlite:///{db_path.as_posix()}")
 
-    base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base_time = datetime(2026, 1, 1, tzinfo=UTC)
     with session_scope() as session:
         for idx in range(5):
             session.add(

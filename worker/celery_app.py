@@ -26,6 +26,6 @@ celery_app.conf.update(
     },
     # Transient DB retry, late ack, and reject-on-worker-lost are task-level
     # settings. Duplicate-safe redelivery depends on task_id-based idempotency;
-    # task status and a real dead-letter queue remain deferred.
+    # a real dead-letter queue remains deferred.
     task_ignore_result=True,
 )

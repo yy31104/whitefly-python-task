@@ -10,3 +10,12 @@ dist/
 build/
 *.sqlite3
 *.db
+
+# Local tool output and private preparation.
+.DS_Store
+.coverage
+htmlcov/
+*.log
+*.db-*
+*.sqlite3-*
+/docs/INTERVIEW_NOTES.md

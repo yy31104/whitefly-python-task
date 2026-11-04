@@ -1,6 +1,6 @@
 # Limitations And Operational Notes
 
-This project is intentionally a reliability lab, not a finished production platform.
+Operational boundaries and recovery steps for the local form-submission demo.
 
 ## Current Limitations
 

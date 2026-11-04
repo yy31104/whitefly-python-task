@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 
@@ -41,7 +41,7 @@ def mark_task_queued(task_id: str) -> None:
                 session.commit()
             except IntegrityError:
                 session.rollback()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - best-effort status writes
         _log_status_write_failed(task_id, "queued", exc)
 
 
@@ -90,7 +90,7 @@ def record_task_status(
                     retries=retries,
                 )
                 session.commit()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - best-effort status writes
         _log_status_write_failed(task_id, status, exc)
 
 
@@ -132,7 +132,7 @@ def _update_task_status(
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _log_status_write_failed(task_id: str, status: str, exc: Exception) -> None:

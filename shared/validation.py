@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
-
 
 NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z\s'-]*$")
 MIN_NAME_LENGTH = 2
@@ -27,9 +27,13 @@ def validate_name(value: str | None, field_name: str) -> str:
     if not cleaned:
         raise ValidationError(f"{field_name} is required.")
     if len(cleaned) < MIN_NAME_LENGTH:
-        raise ValidationError(f"{field_name} must be at least {MIN_NAME_LENGTH} characters.")
+        raise ValidationError(
+            f"{field_name} must be at least {MIN_NAME_LENGTH} characters."
+        )
     if len(cleaned) > MAX_NAME_LENGTH:
-        raise ValidationError(f"{field_name} must be at most {MAX_NAME_LENGTH} characters.")
+        raise ValidationError(
+            f"{field_name} must be at most {MAX_NAME_LENGTH} characters."
+        )
     if not NAME_PATTERN.match(cleaned):
         raise ValidationError(f"{field_name} contains invalid characters.")
     if "--" in cleaned or "''" in cleaned:

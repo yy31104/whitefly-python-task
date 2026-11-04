@@ -1,6 +1,6 @@
 # Architecture
 
-Whitefly is a small backend reliability lab built around the same submission workflow implemented in Flask and FastAPI. The application keeps the assignment-sized surface area, but adds production-style observability, migrations, idempotency, retries, redelivery safety, and async task visibility.
+The same form-submission workflow is implemented in Flask and FastAPI. Shared modules handle validation, persistence, idempotency, request correlation, and task status; Celery processes queued submissions.
 
 ## System Topology
 

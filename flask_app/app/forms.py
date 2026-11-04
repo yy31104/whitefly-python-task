@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
 SYNC_FORM_FIELDS = ("first_name", "last_name", "email", "honeypot")
 
 

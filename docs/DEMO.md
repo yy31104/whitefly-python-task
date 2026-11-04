@@ -1,174 +1,183 @@
-# Demo Script
+# Demo guide
 
-This demo is PowerShell-first and assumes Docker Desktop is running.
+These examples use a POSIX shell, Docker Compose, and generated form data. Run them from the repository root after installing the local dependencies in the [README](../README.md).
 
-## Start The Stack
+## Start a fresh stack
 
-```powershell
-Copy-Item .env.example .env -Force
-docker compose up -d --build
+```bash
+cp .env.example .env
+docker compose build
+docker compose run --rm flask_app alembic upgrade head
+docker compose up -d
 docker compose ps
 ```
 
-Expected containers:
-- `whitefly-nginx`
-- `whitefly-flask`
-- `whitefly-fastapi`
-- `whitefly-worker`
-- `whitefly-redis`
-- `whitefly-postgres`
+The one-off migration starts PostgreSQL and Redis dependencies first. The app containers start afterward, so their schema initialization sees the migrated tables.
 
-Open:
-- Flask: `http://localhost:8080/flask/`
-- FastAPI: `http://localhost:8080/fastapi/`
+The image definitions are under `docker/`; each build keeps the repository root as its context. To inspect app health:
 
-## Sync Form Happy Path
+```bash
+docker inspect --format '{{json .State.Health.Status}}' whitefly-flask
+docker inspect --format '{{json .State.Health.Status}}' whitefly-fastapi
+```
 
-```powershell
-curl.exe -i -L `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
+Open [Flask](http://localhost:8080/flask/) or [FastAPI](http://localhost:8080/fastapi/).
+
+For a local SQLite database, migrate before importing the default app or running tests:
+
+```bash
+DATABASE_URL=sqlite:///app.db .venv/bin/alembic upgrade head
+```
+
+If an existing database was already created from the current SQLAlchemy metadata, confirm schema parity before marking it current:
+
+```bash
+docker compose exec flask_app alembic stamp head
+```
+
+## Synchronous submissions
+
+Flask:
+
+```bash
+curl -i -L \
+  -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/flask/sync-form
 ```
 
-FastAPI parity:
+FastAPI:
 
-```powershell
-curl.exe -i -L `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
+```bash
+curl -i -L \
+  -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/fastapi/sync-form
 ```
 
-## Async Form Happy Path With UI Polling
+The successful POST redirects after the row is saved. `-L` follows that redirect to the result page.
 
-Open the async form in a browser:
+## Asynchronous submissions and status
 
-```powershell
-Start-Process http://localhost:8080/flask/async-form
-Start-Process http://localhost:8080/fastapi/async-form
-```
+Open the [Flask form](http://localhost:8080/flask/async-form) or [FastAPI form](http://localhost:8080/fastapi/async-form). Submit the form and watch its status region poll until a terminal state.
 
-Submit the form. The page redirects back with a `task_id` query parameter and shows a small status region. The browser polls every two seconds until it reaches a terminal state.
+To enqueue from a terminal and inspect the redirect:
 
-CLI enqueue example:
-
-```powershell
-curl.exe -i -L `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
+```bash
+curl -i \
+  -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/flask/async-form
 ```
 
-## Request Correlation Demo
+Copy `task_id` from the `Location` response header into the following variable:
 
-```powershell
-$requestId = "demo-trace-001"
+```bash
+task_id='replace-with-the-returned-task-id'
+curl -s "http://localhost:8080/flask/async-status/$task_id"
+curl -s "http://localhost:8080/fastapi/async-status/$task_id"
+```
 
-curl.exe -i `
-  -H "X-Request-ID: $requestId" `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
+The status response contains lifecycle metadata. Names, emails, and form payloads stay out of that response.
+
+## Follow one request through the logs
+
+```bash
+request_id='demo-trace-001'
+curl -i \
+  -H "X-Request-ID: $request_id" \
+  -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/flask/async-form
 
-docker logs whitefly-nginx | Select-String $requestId
-docker logs whitefly-flask | Select-String $requestId
-docker logs whitefly-worker | Select-String $requestId
+docker compose logs nginx flask_app worker | grep -F "$request_id"
 ```
 
-The same `request_id` should appear in nginx, app, and worker logs.
+Nginx, the app, and the worker use the same `request_id` for this submission.
 
-## Idempotency-Key Replay Demo
+## Replay an idempotency key
 
-Same key and same payload should converge on one logical submission.
+Run the request twice with the same key and payload:
 
-```powershell
-$key = "demo-key-001"
-
-curl.exe -i -L `
-  -H "Idempotency-Key: $key" `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
-  http://localhost:8080/flask/sync-form
-
-curl.exe -i -L `
-  -H "Idempotency-Key: $key" `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
-  http://localhost:8080/flask/sync-form
+```bash
+idempotency_key='demo-key-001'
+for attempt in 1 2; do
+  curl -i \
+    -H "Idempotency-Key: $idempotency_key" \
+    -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
+    http://localhost:8080/flask/sync-form
+done
 ```
 
-## Same-Key Different-Payload Conflict Demo
+Both requests refer to one stored submission. A changed payload with that same key returns `409`:
 
-```powershell
-$conflictKey = "demo-conflict-001"
-
-curl.exe -i `
-  -H "Idempotency-Key: $conflictKey" `
-  -d "first_name=Grace&last_name=Hopper&email=demo@example.com&honeypot=" `
-  http://localhost:8080/flask/sync-form
-
-curl.exe -i `
-  -H "Idempotency-Key: $conflictKey" `
-  -d "first_name=Ada&last_name=Lovelace&email=demo@example.com&honeypot=" `
+```bash
+curl -i \
+  -H "Idempotency-Key: $idempotency_key" \
+  -d 'first_name=Another&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/flask/sync-form
 ```
 
-The second request should return `409`.
+## Worker loss and redelivery
 
-## Status Endpoint Example
+1. Enqueue an asynchronous submission.
+2. Stop the worker while processing is in flight:
 
-If the async redirect shows `task_id=abc123`, query status directly:
-
-```powershell
-$taskId = "abc123"
-Invoke-WebRequest `
-  -Headers @{ Accept = "application/json" } `
-  -Uri "http://localhost:8080/flask/async-status/$taskId" |
-  Select-Object -ExpandProperty Content
-```
-
-FastAPI equivalent:
-
-```powershell
-Invoke-WebRequest `
-  -Headers @{ Accept = "application/json" } `
-  -Uri "http://localhost:8080/fastapi/async-status/$taskId" |
-  Select-Object -ExpandProperty Content
-```
-
-## Worker Lost / Redelivery Demo
-
-This demonstrates the operational shape. The exact timing is intentionally manual.
-
-1. Start an async submission from the browser or CLI.
-2. Kill the worker container:
-
-```powershell
+```bash
 docker compose kill worker
-docker compose ps
 ```
 
-3. Restart the worker:
+3. Restart it and inspect the task in the logs:
 
-```powershell
+```bash
 docker compose up -d worker
 docker compose logs -f worker
 ```
 
-Because `acks_late=True`, `reject_on_worker_lost=True`, and task-id based idempotency are enabled, a redelivered task can run again without duplicating the submission.
+Late acknowledgement, rejection on worker loss, and task-ID idempotency allow a redelivered task to reuse its earlier submission. Redis visibility timeout can delay the redelivery; this is a manual timing exercise.
 
-## Redis Down / Queue Unavailable Demo
+## Queue unavailable
 
-```powershell
+```bash
 docker compose stop redis
-
-curl.exe -i `
-  -d "first_name=Grace&last_name=Hopper&email=grace@example.com&honeypot=" `
+curl -i \
+  -d 'first_name=Demo&last_name=Viewer&email=demo@example.com&honeypot=' \
   http://localhost:8080/flask/async-form
-
 docker compose start redis
 docker compose up -d worker
 ```
 
-When Redis is down, async enqueue should fail in a controlled way instead of silently accepting work that was not queued.
+A failed publish returns `503`. Restart Redis before continuing with other examples.
 
-## Shut Down
+## Load testing conditions
 
-```powershell
+The scripts use ten virtual users for twenty seconds. The example configuration limits each client and endpoint to twenty POSTs per minute, so a default run exercises rate-limit rejection.
+
+For a throughput experiment, choose an explicit local rate budget that matches the workload, recreate the app services, and record the rate setting alongside the result. Keep the application defaults and the k6 thresholds unchanged in source.
+
+With k6 installed locally:
+
+```bash
+k6 run load_tests/sync_form.js
+k6 run load_tests/async_form.js
+```
+
+Docker can run the same scripts on the stack's network. The following network name assumes the default clone directory `whitefly-python-task`; substitute your Compose project's network if you used another project name:
+
+```bash
+docker run --rm --network whitefly-python-task_default \
+  -e BASE_URL=http://nginx/flask \
+  -v "$PWD/load_tests:/scripts:ro" \
+  grafana/k6 run /scripts/sync_form.js
+
+docker run --rm --network whitefly-python-task_default \
+  -e BASE_URL=http://nginx/fastapi \
+  -v "$PWD/load_tests:/scripts:ro" \
+  grafana/k6 run /scripts/async_form.js
+```
+
+Historical figures from the old README are kept in [development records](../devlog/README.original.md). Their [configuration context](../devlog/LOAD_TEST_CONTEXT.md) explains why they are absent from the current project overview.
+
+## Shut down
+
+```bash
 docker compose down
 ```
+
+This retains the local PostgreSQL volume for a later run.

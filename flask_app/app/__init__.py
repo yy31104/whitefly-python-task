@@ -3,9 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from flask import Flask
-from flask import g
-from flask import request
+from flask import Flask, g, request
 
 from flask_app.app.config import Config
 from shared.db import init_database

@@ -159,7 +159,7 @@ def _record_task_status(
             error_type=error_type,
             retries=retries,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - best-effort status writes
         logger.warning(
             "task status write failed",
             extra={
