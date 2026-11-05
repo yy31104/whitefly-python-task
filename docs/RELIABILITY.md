@@ -62,10 +62,22 @@ Async requests with a key first insert an `idempotency_claims` row whose primary
 | Same payload | processed | the original task id (replay, nothing enqueued) |
 | Same payload | failed | the claim moves to a new task, which is enqueued |
 
-A sync request whose key is claimed by an async request gets the same 422/409 classification. The status codes follow `draft-ietf-httpapi-idempotency-key-header` (422 for a key reused with a different payload, 409 while the original request is outstanding). The draft is not an RFC.
+A sync request whose key is claimed by an async request gets the same 422/409 classification.
+
+Keys are scoped per client. The HTTP routes pass the trusted client identifier (`X-Real-IP` set by Nginx, else the first `X-Forwarded-For` hop, else the socket peer) as `client_scope`, and the service stores `SHA-256(client_scope, NUL, key)` instead of the raw key. Two clients that pick the same key get two independent requests. The digest is 64 hex characters, so it fits the existing columns and neither the raw key nor the IP is stored. Direct service calls without `client_scope` keep the key unscoped.
+
+Keys expire after `IDEMPOTENCY_KEY_TTL_SECONDS` (default 86400). Expiry is checked when a key is looked up; no job deletes rows.
+
+| Lookup finds | Age | Effect |
+| --- | --- | --- |
+| `submissions` row with the key | older than the TTL | the old row's key is set to NULL, the request inserts a new row |
+| `idempotency_claims` row | older than the TTL | the claim is rebound to the new request (new task id, fingerprint, `created_at`) and enqueued |
+| either | within the TTL | the 422/409/replay rules above apply |
+
+The status codes follow `draft-ietf-httpapi-idempotency-key-header` (422 for a key reused with a different payload, 409 while the original request is outstanding). The draft is not an RFC.
 
 Code pointers:
-- `shared/idempotency.py`
+- `shared/idempotency.py` (`scope_idempotency_key`, `idempotency_ttl`, `is_expired`)
 - `shared/services.py`
 - `shared/models.py`
 - `worker/tasks.py`

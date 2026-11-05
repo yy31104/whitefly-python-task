@@ -841,3 +841,18 @@ def test_async_same_key_different_payload_returns_422(client, monkeypatch):
     assert first.status_code == 302
     assert second.status_code == 422
     assert b"already used for a different submission" in second.data
+
+
+def test_same_idempotency_key_from_two_clients_does_not_collide(client):
+    for ip, first_name in (("10.0.0.1", "Grace"), ("10.0.0.2", "Alan")):
+        response = client.post(
+            "/sync-form",
+            data={
+                "first_name": first_name,
+                "last_name": "Hopper",
+                "email": f"{first_name.lower()}@example.com",
+            },
+            headers={"Idempotency-Key": "shared-key", "X-Real-IP": ip},
+        )
+        assert response.status_code == 302
+    assert _count_submissions() == 2
