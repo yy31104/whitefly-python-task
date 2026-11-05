@@ -40,6 +40,8 @@ services:
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS}
       IDEMPOTENCY_KEY_TTL_SECONDS: ${IDEMPOTENCY_KEY_TTL_SECONDS:-86400}
       FLASK_URL_PREFIX: /flask
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: whitefly-flask
     healthcheck:
       test:
         [
@@ -73,6 +75,8 @@ services:
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS}
       IDEMPOTENCY_KEY_TTL_SECONDS: ${IDEMPOTENCY_KEY_TTL_SECONDS:-86400}
       FASTAPI_URL_PREFIX: /fastapi
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: whitefly-fastapi
     healthcheck:
       test:
         [
@@ -100,6 +104,8 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
       IDEMPOTENCY_KEY_TTL_SECONDS: ${IDEMPOTENCY_KEY_TTL_SECONDS:-86400}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: whitefly-worker
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,6 +122,21 @@ services:
     depends_on:
       - flask_app
       - fastapi_app
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.115.0
+    container_name: whitefly-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/jaeger:2.5.0
+    container_name: whitefly-jaeger
+    ports:
+      - "127.0.0.1:16686:16686"
 
 volumes:
   postgres_data:

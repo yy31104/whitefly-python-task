@@ -1,0 +1,13 @@
+HTTP 302; 12 spans -> docs/evidence/async-submission-trace.otlp.json
+40228556  POST /async-form [SERVER] 16.5 ms
+40228556    SELECT .../evidence.db [CLIENT] 0.1 ms
+40228556    INSERT .../evidence.db [CLIENT] 0.1 ms
+40228556    SELECT .../evidence.db [CLIENT] 0.1 ms
+40228556    INSERT .../evidence.db [CLIENT] 0.1 ms
+40228556    apply_async/worker.save_async_submission [PRODUCER] 0.3 ms
+40228556      run/worker.save_async_submission [CONSUMER] 16.4 ms
+40228556        UPDATE .../evidence.db [CLIENT] 0.4 ms
+40228556        SELECT .../evidence.db [CLIENT] 0.1 ms
+40228556        INSERT .../evidence.db [CLIENT] 0.1 ms
+40228556        SELECT .../evidence.db [CLIENT] 0.1 ms
+40228556        UPDATE .../evidence.db [CLIENT] 0.1 ms
