@@ -8,6 +8,7 @@ import pytest
 
 from flask_app.app import create_app
 from shared.db import session_scope
+from shared.idempotency import scope_idempotency_key
 from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
@@ -207,7 +208,8 @@ def test_sync_idempotency_header_overrides_form_key(client):
 
     assert response.status_code == 302
     row = _submission_by_email("flask-header@example.com")
-    assert row.idempotency_key == "flask-header-key"
+    # The stored key is scoped to the client that sent it.
+    assert row.idempotency_key == scope_idempotency_key("flask-header-key", "127.0.0.1")
 
 
 def test_sync_malformed_idempotency_key_is_ignored(client):
@@ -367,7 +369,9 @@ def test_async_post_with_idempotency_key_passes_key_to_task(client, monkeypatch)
     )
 
     assert response.status_code == 302
-    assert calls[0]["idempotency_key"] == "flask-async-key"
+    assert calls[0]["idempotency_key"] == scope_idempotency_key(
+        "flask-async-key", "127.0.0.1"
+    )
 
 
 def test_async_post_without_idempotency_key_omits_task_kwarg(client, monkeypatch):

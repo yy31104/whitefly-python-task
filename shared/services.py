@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from kombu.exceptions import OperationalError
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
 from shared.db import session_scope
-from shared.idempotency import request_fingerprint
+from shared.idempotency import is_expired, request_fingerprint, scope_idempotency_key
 from shared.logging import get_request_id
 from shared.models import IdempotencyClaim, Submission, TaskStatus
 from shared.task_status import (
@@ -72,6 +73,9 @@ def _persist_submission(
                 session,
                 resolved_idempotency_key,
             )
+            if existing is not None and is_expired(existing.created_at):
+                _release_expired_key(session, existing, resolved_idempotency_key)
+                existing = None
             if existing is not None:
                 if _payload_matches(existing, validated_payload):
                     _log_idempotent_event(
@@ -139,6 +143,25 @@ def _persist_submission(
         return submission
 
 
+def _release_expired_key(session, submission: Submission, idempotency_key: str) -> None:
+    """Detach an expired key from its old row so a new request can use it."""
+    session.execute(
+        update(Submission)
+        .where(
+            Submission.id == submission.id,
+            Submission.idempotency_key == idempotency_key,
+        )
+        .values(idempotency_key=None)
+    )
+    session.commit()
+    _log_idempotent_event(
+        "submission_idempotency_key_expired",
+        submission,
+        idempotency_key,
+        submission.form_type,
+    )
+
+
 def _normalize_idempotency_key(idempotency_key: str | None) -> str | None:
     value = (idempotency_key or "").strip()
     return value or None
@@ -190,16 +213,19 @@ def create_submission_sync(
     honeypot: str = "",
     *,
     idempotency_key: str | None = None,
+    client_scope: str | None = None,
 ) -> Submission:
     validated = validate_submission_data(first_name, last_name, email, honeypot)
-    resolved_key = _normalize_idempotency_key(idempotency_key)
+    resolved_key = scope_idempotency_key(
+        _normalize_idempotency_key(idempotency_key), client_scope
+    )
     if resolved_key:
         _reject_if_claimed_elsewhere(resolved_key, request_fingerprint(validated))
     return _persist_submission(
         validated,
         form_type="sync",
         status="processed",
-        idempotency_key=idempotency_key,
+        idempotency_key=resolved_key,
     )
 
 
@@ -207,7 +233,7 @@ def _reject_if_claimed_elsewhere(idempotency_key: str, fingerprint: str) -> None
     """A sync request must not race an async request that owns the same key."""
     with session_scope() as session:
         claim = session.get(IdempotencyClaim, idempotency_key)
-        if claim is None:
+        if claim is None or is_expired(claim.created_at):
             return
         if claim.request_fingerprint != fingerprint:
             raise IdempotencyKeyMismatch(
@@ -235,6 +261,7 @@ def enqueue_submission_async(
     honeypot: str = "",
     *,
     idempotency_key: str | None = None,
+    client_scope: str | None = None,
 ) -> str:
     validated = validate_submission_data(first_name, last_name, email, honeypot)
 
@@ -250,7 +277,9 @@ def enqueue_submission_async(
     if request_id:
         task_kwargs["request_id"] = request_id
 
-    resolved_key = _normalize_idempotency_key(idempotency_key)
+    resolved_key = scope_idempotency_key(
+        _normalize_idempotency_key(idempotency_key), client_scope
+    )
     if resolved_key:
         task_kwargs["idempotency_key"] = resolved_key
         return _enqueue_with_claim(
@@ -312,6 +341,9 @@ def _enqueue_with_claim(
                 claim = session.get(IdempotencyClaim, idempotency_key)
                 if claim is None:
                     raise
+        if claim is not None and is_expired(claim.created_at):
+            _take_over_expired_claim(session, claim, fingerprint, task_id)
+            claim = None
         if claim is not None:
             existing = _classify_existing_claim(session, claim, fingerprint, task_id)
             if existing is not None:
@@ -329,6 +361,32 @@ def _enqueue_with_claim(
         ) from exc
     _log_claim_event("idempotency_claim_enqueued", idempotency_key, task_id)
     return task_id
+
+
+def _take_over_expired_claim(
+    session, claim: IdempotencyClaim, fingerprint: str, new_task_id: str
+) -> None:
+    """An expired claim is free: rebind it to this request, as if it were new."""
+    old_task_id = claim.task_id
+    moved = session.execute(
+        update(IdempotencyClaim)
+        .where(
+            IdempotencyClaim.idempotency_key == claim.idempotency_key,
+            IdempotencyClaim.task_id == old_task_id,
+        )
+        .values(
+            task_id=new_task_id,
+            request_fingerprint=fingerprint,
+            created_at=datetime.now(UTC),
+        )
+    )
+    session.commit()
+    if moved.rowcount != 1:
+        # Another request took it over first; it now owns a fresh claim.
+        raise IdempotencyRequestInFlight(
+            "A request with this idempotency key is still being processed."
+        )
+    _log_claim_event("idempotency_claim_expired", claim.idempotency_key, old_task_id)
 
 
 def _classify_existing_claim(
