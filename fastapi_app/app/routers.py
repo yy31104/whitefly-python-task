@@ -132,6 +132,7 @@ async def sync_form_post(
         create_submission_sync(
             **form_data,
             idempotency_key=resolved_idempotency_key,
+            client_scope=_client_identifier(request),
         )
     except RateLimitExceeded as exc:
         response = templates.TemplateResponse(
@@ -221,6 +222,7 @@ async def async_form_post(
         task_id = enqueue_submission_async(
             **form_data,
             idempotency_key=resolved_idempotency_key,
+            client_scope=_client_identifier(request),
         )
     except RateLimitExceeded as exc:
         response = templates.TemplateResponse(

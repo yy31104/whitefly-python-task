@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from fastapi_app.app.main import create_app
 from shared.db import session_scope
+from shared.idempotency import scope_idempotency_key
 from shared.logging import get_request_id
 from shared.models import Submission
 from shared.rate_limit import RateLimitExceeded
@@ -208,7 +209,10 @@ def test_sync_idempotency_header_overrides_form_key(client: TestClient):
 
     assert response.status_code == 303
     row = _submission_by_email("fastapi-header@example.com")
-    assert row.idempotency_key == "fastapi-header-key"
+    # The stored key is scoped to the client that sent it.
+    assert row.idempotency_key == scope_idempotency_key(
+        "fastapi-header-key", "testclient"
+    )
 
 
 def test_sync_malformed_idempotency_key_is_ignored(client: TestClient):
@@ -304,7 +308,9 @@ def test_async_post_with_idempotency_key_passes_key_to_task(
     )
 
     assert response.status_code == 303
-    assert calls[0]["idempotency_key"] == "fastapi-async-key"
+    assert calls[0]["idempotency_key"] == scope_idempotency_key(
+        "fastapi-async-key", "testclient"
+    )
 
 
 def test_async_post_without_idempotency_key_omits_task_kwarg(
@@ -863,3 +869,19 @@ def test_async_same_key_different_payload_returns_422(
     assert first.status_code == 303
     assert second.status_code == 422
     assert "already used for a different submission" in second.text
+
+
+def test_same_idempotency_key_from_two_clients_does_not_collide(client: TestClient):
+    for ip, first_name in (("10.0.0.1", "Grace"), ("10.0.0.2", "Alan")):
+        response = client.post(
+            "/sync-form",
+            data={
+                "first_name": first_name,
+                "last_name": "Hopper",
+                "email": f"{first_name.lower()}@example.com",
+            },
+            headers={"Idempotency-Key": "shared-key", "X-Real-IP": ip},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+    assert _count_submissions() == 2

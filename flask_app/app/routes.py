@@ -80,7 +80,11 @@ def sync_form():
                 window_seconds=current_app.config["RATE_LIMIT_WINDOW_SECONDS"],
                 redis_url=current_app.config.get("REDIS_URL"),
             )
-            create_submission_sync(**form_data, idempotency_key=idempotency_key)
+            create_submission_sync(
+                **form_data,
+                idempotency_key=idempotency_key,
+                client_scope=_client_identifier(),
+            )
         except RateLimitExceeded as exc:
             flash(str(exc), "error")
             response = make_response(
@@ -156,6 +160,7 @@ def async_form():
             task_id = enqueue_submission_async(
                 **form_data,
                 idempotency_key=idempotency_key,
+                client_scope=_client_identifier(),
             )
         except RateLimitExceeded as exc:
             flash(str(exc), "error")

@@ -29,6 +29,15 @@ For a local SQLite database, migrate before importing the default app or running
 DATABASE_URL=sqlite:///app.db .venv/bin/alembic upgrade head
 ```
 
+To run the tests against PostgreSQL instead of per-test SQLite files, point `TEST_DATABASE_URL` at an empty database. `tests/conftest.py` redirects every `init_database()` engine there and drops the application tables before each test, so do not point it at a database you want to keep:
+
+```bash
+docker run -d --name whitefly-test-pg -e POSTGRES_USER=whitefly -e POSTGRES_PASSWORD=whitefly -e POSTGRES_DB=whitefly_test -p 127.0.0.1:55432:5432 postgres:16-alpine
+TEST_DATABASE_URL=postgresql+psycopg2://whitefly:whitefly@127.0.0.1:55432/whitefly_test .venv/bin/python -m pytest
+```
+
+The pytest header shows `database: postgresql+psycopg2 via TEST_DATABASE_URL` when the switch is active. CI runs the suite both ways.
+
 If an existing database was already created from the current SQLAlchemy metadata, confirm schema parity before marking it current:
 
 ```bash
