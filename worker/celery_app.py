@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from flask_app.app.config import Config
+from shared.telemetry import configure_tracing, instrument_celery
 
 celery_app = Celery(
     "whitefly_worker",
@@ -29,3 +31,10 @@ celery_app.conf.update(
     # a real dead-letter queue remains deferred.
     task_ignore_result=True,
 )
+
+
+@worker_process_init.connect(weak=False)
+def _init_worker_tracing(*_args, **_kwargs) -> None:
+    # Prefork children must build their own exporter thread after the fork.
+    configure_tracing("whitefly-worker")
+    instrument_celery()

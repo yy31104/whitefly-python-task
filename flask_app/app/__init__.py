@@ -14,6 +14,7 @@ from shared.logging import (
     resolve_request_id,
     set_request_id,
 )
+from shared.telemetry import configure_tracing, instrument_celery, instrument_flask_app
 
 logger = logging.getLogger(__name__)
 _FORM_POST_ENDPOINTS = {"main.sync_form", "main.async_form"}
@@ -21,6 +22,8 @@ _FORM_POST_ENDPOINTS = {"main.sync_form", "main.async_form"}
 
 def create_app(config_override: dict | None = None) -> Flask:
     configure_logging()
+    configure_tracing("whitefly-flask")
+    instrument_celery()
 
     app = Flask(__name__, template_folder="../templates")
     app.config.from_object(Config)
@@ -44,6 +47,7 @@ def create_app(config_override: dict | None = None) -> Flask:
 
     app.register_blueprint(bp, url_prefix=app.config.get("FLASK_URL_PREFIX", ""))
     _register_request_observability(app)
+    instrument_flask_app(app)
     return app
 
 
