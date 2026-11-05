@@ -253,6 +253,35 @@ def test_create_all_schema_matches_alembic_head_for_task_statuses(
         create_all_engine.dispose()
 
 
+def test_create_all_schema_matches_alembic_head_for_idempotency_claims(
+    monkeypatch, tmp_path
+):
+    alembic_database_url = f"sqlite:///{(tmp_path / 'alembic_claims.db').as_posix()}"
+    create_all_database_url = (
+        f"sqlite:///{(tmp_path / 'create_all_claims.db').as_posix()}"
+    )
+    monkeypatch.setenv("DATABASE_URL", alembic_database_url)
+
+    alembic_engine = create_engine(alembic_database_url)
+    create_all_engine = create_engine(create_all_database_url)
+    try:
+        command.upgrade(_alembic_config(), "head")
+        Base.metadata.create_all(bind=create_all_engine)
+
+        assert _column_names(alembic_engine, "idempotency_claims") == _column_names(
+            create_all_engine, "idempotency_claims"
+        )
+        for engine in (alembic_engine, create_all_engine):
+            primary_key = inspect(engine).get_pk_constraint("idempotency_claims")
+            assert primary_key["constrained_columns"] == ["idempotency_key"]
+
+        command.downgrade(_alembic_config(), "20260529_0003")
+        assert "idempotency_claims" not in inspect(alembic_engine).get_table_names()
+    finally:
+        alembic_engine.dispose()
+        create_all_engine.dispose()
+
+
 def test_alembic_revision_template_exists_and_generates_temp_revision(tmp_path):
     root_dir = Path(__file__).resolve().parents[1]
     template_path = root_dir / "migrations" / "script.py.mako"

@@ -51,7 +51,18 @@ Problem: Retries, double submits, browser refreshes, and worker redelivery can c
 
 Mechanism: The schema adds nullable unique `Submission.idempotency_key`. The service layer centralizes deduplication. HTTP routes accept an `Idempotency-Key` header and hidden browser form keys. The worker uses `effective_idempotency_key = client idempotency_key or Celery task_id`.
 
-Guarantee: Same key plus same payload returns the existing row. Same key plus different payload becomes an `IdempotencyConflict`. Keyless async retries and redeliveries converge on the Celery `task_id`.
+Guarantee: Same key plus same payload returns the existing row. Same key plus different payload is refused with HTTP 422 (`IdempotencyKeyMismatch`). Keyless async retries and redeliveries converge on the Celery `task_id`.
+
+Async requests with a key first insert an `idempotency_claims` row whose primary key is the key itself, then write `queued` and enqueue with that task id. Of two concurrent first requests exactly one inserts the claim. A later request with the same key is classified from the claim's SHA-256 request fingerprint and the owning task's status:
+
+| Later request | Owning task | Response |
+| --- | --- | --- |
+| Different payload | any | 422 `IdempotencyKeyMismatch` |
+| Same payload | queued, processing, retrying, or no status row yet | 409 `IdempotencyRequestInFlight` |
+| Same payload | processed | the original task id (replay, nothing enqueued) |
+| Same payload | failed | the claim moves to a new task, which is enqueued |
+
+A sync request whose key is claimed by an async request gets the same 422/409 classification. The status codes follow `draft-ietf-httpapi-idempotency-key-header` (422 for a key reused with a different payload, 409 while the original request is outstanding). The draft is not an RFC.
 
 Code pointers:
 - `shared/idempotency.py`
@@ -94,7 +105,7 @@ Code pointers:
 
 Problem: Async failures may happen before a submission row exists, so there needs to be visibility independent of `Submission.status`.
 
-Mechanism: `task_statuses` stores current lifecycle state by Celery `task_id`. Status writes are best-effort and never allowed to break enqueue or worker processing.
+Mechanism: `task_statuses` stores current lifecycle state by Celery `task_id`. Status writes are best-effort and never allowed to break enqueue or worker processing. Transitions are a single conditional `UPDATE ... WHERE status NOT IN ('processed', 'failed')`: once a task is terminal, a duplicate delivery (acks_late) cannot move it back to `processing` or `retrying`.
 
 Guarantee: The app can answer "what happened to task X?" for queued, processing, retrying, processed, failed, and conflict states while keeping Celery result backend ignored.
 
@@ -129,4 +140,4 @@ Code pointers:
 | DB down | Worker retries bounded `OperationalError`; exhausted retries become failed status/logs | Retry is bounded and visible | `worker/tasks.py`, `shared/task_status.py` |
 | Redis down | Async publish failure becomes controlled queue-unavailable behavior | Request path does not pretend enqueue succeeded | `shared/services.py`, `flask_app/app/routes.py`, `fastapi_app/app/routers.py` |
 | Duplicate key | Same key and same payload reuses; different payload conflicts | Prevents duplicate rows while protecting semantic mismatch | `shared/services.py`, `shared/idempotency.py` |
-| IdempotencyConflict | Sync returns 409; async records conflict and logs terminal failure | Deterministic conflict does not retry forever | `shared/services.py`, `worker/tasks.py`, `shared/task_status.py` |
+| Idempotency key reuse | Different payload returns 422; same request still in flight returns 409; a worker-side mismatch records conflict and logs terminal failure | Deterministic conflict does not retry forever | `shared/services.py`, `worker/tasks.py`, `shared/task_status.py` |

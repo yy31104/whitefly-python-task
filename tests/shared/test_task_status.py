@@ -269,3 +269,45 @@ def test_mark_task_queued_failure_is_logged_and_swallowed(
     assert records[0].status == "queued"
     assert records[0].error_type == "RuntimeError"
     _assert_no_pii_logged(caplog)
+
+
+def test_processed_task_never_returns_to_processing(tmp_path):
+    """A duplicate delivery (acks_late) must not reopen a finished task."""
+    init_database(f"sqlite:///{(tmp_path / 'task_status_monotonic.db').as_posix()}")
+    mark_task_queued("task-monotonic")
+    record_task_status("task-monotonic", "processing", retries=0)
+    record_task_status("task-monotonic", "processed", submission_id=7, retries=0)
+
+    record_task_status("task-monotonic", "processing", retries=0)
+    record_task_status(
+        "task-monotonic", "retrying", error_type="OperationalError", retries=1
+    )
+
+    row = _get_task_status("task-monotonic")
+    assert row.status == "processed"
+    assert row.submission_id == 7
+    assert row.error_type is None
+    assert row.retries == 0
+
+
+def test_failed_task_is_terminal(tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'task_status_failed.db').as_posix()}")
+    record_task_status("task-failed", "failed", error_type="IdempotencyKeyMismatch")
+
+    record_task_status("task-failed", "processing")
+
+    assert _get_task_status("task-failed").status == "failed"
+
+
+def test_non_terminal_transitions_still_apply(tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'task_status_flow.db').as_posix()}")
+    mark_task_queued("task-flow")
+    record_task_status("task-flow", "processing", retries=0)
+    record_task_status(
+        "task-flow", "retrying", error_type="OperationalError", retries=1
+    )
+    record_task_status("task-flow", "processing", retries=1)
+
+    row = _get_task_status("task-flow")
+    assert row.status == "processing"
+    assert row.retries == 1
