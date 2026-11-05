@@ -25,7 +25,7 @@ browser ─► Nginx :8080 ─┬─► /flask/   Flask (gunicorn) ──┐
 ```
 
 1. **Validate.** Flask and FastAPI routes are thin adapters over one [service layer](shared/services.py), so validation, idempotency and persistence behave the same in both.
-2. **Claim the key.** The client key comes from the `Idempotency-Key` header or a hidden form field. Async requests insert it into `idempotency_claims` before enqueueing, so of two concurrent first requests exactly one enqueues.
+2. **Claim the key.** The client key comes from the `Idempotency-Key` header or a hidden form field. HTTP requests scope it to the client IP. Async requests claim that scoped key in `idempotency_claims` before enqueueing, so of two concurrent first requests exactly one enqueues.
 3. **Classify reuse.**
    - Same key and same payload: replay, returning the original result.
    - Same key and different payload: **422**.
@@ -33,7 +33,7 @@ browser ─► Nginx :8080 ─┬─► /flask/   Flask (gunicorn) ──┐
 4. **Persist.** Sync requests write in the request. Async requests are written by the [worker](worker/tasks.py), which retries transient database errors with bounded backoff and uses `acks_late`. Redelivered messages converge on one row through the key, or through the Celery task id when there is no key.
 5. **Report status.** [Task status](shared/task_status.py) moves `queued → processing → processed | failed` and never leaves a terminal state. The browser polls `/async-status/<task_id>`.
 
-Each request carries an `X-Request-ID` through the JSON logs and into the worker. SQL parameters are hidden from logs.
+Each request carries an `X-Request-ID` through the JSON logs and into the worker. OpenTelemetry traces connect Flask or FastAPI, Celery and SQLAlchemy through the Collector to Jaeger. SQL parameters and submitted names and emails are excluded from exported spans.
 
 ## Project layout
 
@@ -99,13 +99,14 @@ CI runs the same three checks on every push and pull request ([`.github/workflow
 
 ## Limits
 
-- No authentication. The forms, the status endpoint and the submissions page are open; this is a local demo.
-- Idempotency keys are global, not scoped per client, and never expire.
+- No authentication. The forms, status endpoint and submissions page are open; use generated data in this local demo.
+- HTTP idempotency scope is the client IP: clients behind one NAT share a scope, and an IP change between retries creates a new scope. Direct service calls without a client scope remain unscoped.
+- Keys expire lazily after 24 hours by default (`IDEMPOTENCY_KEY_TTL_SECONDS`). Expired rows are retained. A message redelivered after that TTL can create another submission; raw keys created before scoping was enabled are not migrated.
 - No dead-letter queue. A task that exhausts its retries is recorded as `failed` and stays there.
-- Task status writes are best effort. A status row can lag the submission, or be missing if the database is unavailable at that moment.
-- No metrics or tracing backend. Correlation is by `X-Request-ID` in the JSON logs only.
+- Task status writes are best effort. A status row can lag the submission or be missing while the database is unavailable.
+- Tracing requires `OTEL_EXPORTER_OTLP_ENDPOINT`; Compose configures it for the Collector and Jaeger. Jaeger keeps traces in memory, and metrics/log export is not configured. JSON logs retain `X-Request-ID` without a trace id.
 - Migrations are not run on startup.
-- The test suite uses SQLite and a patched Celery `apply_async`. PostgreSQL and Redis are exercised only by the Compose run above.
+- CI exercises SQLite and PostgreSQL through `TEST_DATABASE_URL`; engine-construction and migration tests keep SQLite. Celery publishing is patched in the suite; real broker and Jaeger behavior are checked separately in Compose. The PostgreSQL test switch drops application tables and requires a disposable database.
 - The async status UI uses inline JavaScript, and there is no JavaScript test harness.
 
 ## Docs
@@ -114,3 +115,4 @@ CI runs the same three checks on every push and pull request ([`.github/workflow
 - [Reliability](docs/RELIABILITY.md): request ids, idempotency, retries, redelivery, task status
 - [Limitations](docs/LIMITATIONS.md): operational limits and rollback playbook
 - [Demo](docs/DEMO.md): a scripted walk through the running stack
+- [Observability](docs/OBSERVABILITY.md): trace collection, Jaeger exports and fault checks
