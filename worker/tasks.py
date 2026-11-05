@@ -65,7 +65,6 @@ def save_async_submission_task(
     }
     if effective_idempotency_key:
         task_log_context["effective_idempotency_key"] = effective_idempotency_key
-    _record_task_status(task_id, "processing", retries=retries)
     logger.info(
         "async submission task start",
         extra={
@@ -75,6 +74,7 @@ def save_async_submission_task(
     )
     try:
         _ensure_database_ready()
+        _record_task_status(task_id, "processing", retries=retries)
         submission = save_submission_from_worker(
             first_name=first_name,
             last_name=last_name,
