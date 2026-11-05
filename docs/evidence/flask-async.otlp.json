@@ -1,0 +1,806 @@
+{
+  "result": {
+    "resourceSpans": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.instance.id",
+              "value": {
+                "stringValue": "be215214-b7f8-4f6f-a183-f6bf0f1852db"
+              }
+            },
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "whitefly-worker"
+              }
+            },
+            {
+              "key": "telemetry.sdk.language",
+              "value": {
+                "stringValue": "python"
+              }
+            },
+            {
+              "key": "telemetry.sdk.name",
+              "value": {
+                "stringValue": "opentelemetry"
+              }
+            },
+            {
+              "key": "telemetry.sdk.version",
+              "value": {
+                "stringValue": "1.45.2"
+              }
+            }
+          ]
+        },
+        "scopeSpans": [
+          {
+            "scope": {
+              "name": "opentelemetry.instrumentation.sqlalchemy",
+              "version": "0.66b2"
+            },
+            "spans": [
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "f6e2b10397cc8cd8",
+                "parentSpanId": "1279d080300a195c",
+                "name": "SELECT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804312096994",
+                "endTimeUnixNano": "1793841804315532167",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "SELECT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT pg_catalog.pg_class.relname \nFROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace \nWHERE pg_catalog.pg_class.relname IN (%(table_names_1)s, %(table_names_2)s, %(table_names_3)s) AND pg_catalog.pg_class.relkind = ANY (ARRAY[%(param_1)s, %(param_2)s, %(param_3)s, %(param_4)s, %(param_5)s]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != %(nspname_1)s"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "bee2026ced00e0c1",
+                "parentSpanId": "1279d080300a195c",
+                "name": "SELECT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804320935279",
+                "endTimeUnixNano": "1793841804322715434",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "SELECT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT submissions.id AS submissions_id, submissions.first_name AS submissions_first_name, submissions.last_name AS submissions_last_name, submissions.email AS submissions_email, submissions.form_type AS submissions_form_type, submissions.status AS submissions_status, submissions.idempotency_key AS submissions_idempotency_key, submissions.created_at AS submissions_created_at \nFROM submissions \nWHERE submissions.idempotency_key = %(idempotency_key_1)s"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "11a625ab622ec84b",
+                "parentSpanId": "1279d080300a195c",
+                "name": "INSERT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804324481134",
+                "endTimeUnixNano": "1793841804325066949",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "INSERT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "INSERT INTO submissions (first_name, last_name, email, form_type, status, idempotency_key, created_at) VALUES (%(first_name)s, %(last_name)s, %(email)s, %(form_type)s, %(status)s, %(idempotency_key)s, %(created_at)s) RETURNING submissions.id"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "4b471687af8b6779",
+                "parentSpanId": "1279d080300a195c",
+                "name": "SELECT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804327402802",
+                "endTimeUnixNano": "1793841804327799795",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "SELECT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT submissions.id, submissions.first_name, submissions.last_name, submissions.email, submissions.form_type, submissions.status, submissions.idempotency_key, submissions.created_at \nFROM submissions \nWHERE submissions.id = %(pk_1)s"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "ffb6c6d446ace4fc",
+                "parentSpanId": "1279d080300a195c",
+                "name": "UPDATE whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804330324191",
+                "endTimeUnixNano": "1793841804331277251",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "UPDATE whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "UPDATE task_statuses SET status=%(status)s, submission_id=%(submission_id)s, error_type=%(error_type)s, retries=%(retries)s, updated_at=%(updated_at)s WHERE task_statuses.task_id = %(task_id_1)s AND (task_statuses.status NOT IN (%(status_1_1)s, %(status_1_2)s))"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              }
+            ]
+          },
+          {
+            "scope": {
+              "name": "opentelemetry.instrumentation.celery",
+              "version": "0.66b2"
+            },
+            "spans": [
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "1279d080300a195c",
+                "parentSpanId": "815f29bb5e2b5c51",
+                "name": "run/worker.save_async_submission",
+                "kind": 5,
+                "startTimeUnixNano": "1793841804261519285",
+                "endTimeUnixNano": "1793841804332851523",
+                "attributes": [
+                  {
+                    "key": "celery.action",
+                    "value": {
+                      "stringValue": "run"
+                    }
+                  },
+                  {
+                    "key": "celery.delivery_info",
+                    "value": {
+                      "stringValue": "{'exchange': '', 'routing_key': 'celery', 'priority': 0, 'redelivered': False}"
+                    }
+                  },
+                  {
+                    "key": "celery.hostname",
+                    "value": {
+                      "stringValue": "gen7@0c240625a6d8"
+                    }
+                  },
+                  {
+                    "key": "celery.reply_to",
+                    "value": {
+                      "stringValue": "8b7bb7fb-85b2-31a9-af77-58264c6b2d04"
+                    }
+                  },
+                  {
+                    "key": "celery.state",
+                    "value": {
+                      "stringValue": "SUCCESS"
+                    }
+                  },
+                  {
+                    "key": "celery.task_name",
+                    "value": {
+                      "stringValue": "worker.save_async_submission"
+                    }
+                  },
+                  {
+                    "key": "messaging.conversation_id",
+                    "value": {
+                      "stringValue": "6c7b12c0-3c39-4d26-a64b-571c1ee6ad6d"
+                    }
+                  },
+                  {
+                    "key": "messaging.destination",
+                    "value": {
+                      "stringValue": "celery"
+                    }
+                  },
+                  {
+                    "key": "messaging.message.id",
+                    "value": {
+                      "stringValue": "6c7b12c0-3c39-4d26-a64b-571c1ee6ad6d"
+                    }
+                  }
+                ],
+                "status": {}
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.instance.id",
+              "value": {
+                "stringValue": "c3f0419f-c816-4a95-ae26-4fa255f31592"
+              }
+            },
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "whitefly-flask"
+              }
+            },
+            {
+              "key": "telemetry.sdk.language",
+              "value": {
+                "stringValue": "python"
+              }
+            },
+            {
+              "key": "telemetry.sdk.name",
+              "value": {
+                "stringValue": "opentelemetry"
+              }
+            },
+            {
+              "key": "telemetry.sdk.version",
+              "value": {
+                "stringValue": "1.45.2"
+              }
+            }
+          ]
+        },
+        "scopeSpans": [
+          {
+            "scope": {
+              "name": "opentelemetry.instrumentation.sqlalchemy",
+              "version": "0.66b2"
+            },
+            "spans": [
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "41e89e9f0033a054",
+                "parentSpanId": "97e06d6bb75ad297",
+                "name": "SELECT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804234951165",
+                "endTimeUnixNano": "1793841804236021756",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "SELECT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT idempotency_claims.idempotency_key, idempotency_claims.request_fingerprint, idempotency_claims.task_id, idempotency_claims.created_at \nFROM idempotency_claims \nWHERE idempotency_claims.idempotency_key = %(pk_1)s"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "63b89a3d0952f057",
+                "parentSpanId": "97e06d6bb75ad297",
+                "name": "INSERT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804237380115",
+                "endTimeUnixNano": "1793841804237791695",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "INSERT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "INSERT INTO idempotency_claims (idempotency_key, request_fingerprint, task_id, created_at) VALUES (%(idempotency_key)s, %(request_fingerprint)s, %(task_id)s, %(created_at)s)"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "12e8b917f640597c",
+                "parentSpanId": "97e06d6bb75ad297",
+                "name": "SELECT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804241437498",
+                "endTimeUnixNano": "1793841804242136611",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "SELECT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT task_statuses.id AS task_statuses_id, task_statuses.task_id AS task_statuses_task_id, task_statuses.status AS task_statuses_status, task_statuses.submission_id AS task_statuses_submission_id, task_statuses.error_type AS task_statuses_error_type, task_statuses.retries AS task_statuses_retries, task_statuses.created_at AS task_statuses_created_at, task_statuses.updated_at AS task_statuses_updated_at \nFROM task_statuses \nWHERE task_statuses.task_id = %(task_id_1)s"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "4a69ac48e853e158",
+                "parentSpanId": "97e06d6bb75ad297",
+                "name": "INSERT whitefly",
+                "kind": 3,
+                "startTimeUnixNano": "1793841804243040535",
+                "endTimeUnixNano": "1793841804243504025",
+                "attributes": [
+                  {
+                    "key": "db.name",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.operation",
+                    "value": {
+                      "stringValue": "INSERT whitefly"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "INSERT INTO task_statuses (task_id, status, submission_id, error_type, retries, created_at, updated_at) VALUES (%(task_id)s, %(status)s, %(submission_id)s, %(error_type)s, %(retries)s, %(created_at)s, %(updated_at)s) RETURNING task_statuses.id"
+                    }
+                  },
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.user",
+                    "value": {
+                      "stringValue": "whitefly"
+                    }
+                  },
+                  {
+                    "key": "net.peer.name",
+                    "value": {
+                      "stringValue": "postgres"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "5432"
+                    }
+                  }
+                ],
+                "status": {}
+              }
+            ]
+          },
+          {
+            "scope": {
+              "name": "opentelemetry.instrumentation.celery",
+              "version": "0.66b2"
+            },
+            "spans": [
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "815f29bb5e2b5c51",
+                "parentSpanId": "97e06d6bb75ad297",
+                "name": "apply_async/worker.save_async_submission",
+                "kind": 4,
+                "startTimeUnixNano": "1793841804254263620",
+                "endTimeUnixNano": "1793841804259743138",
+                "attributes": [
+                  {
+                    "key": "celery.action",
+                    "value": {
+                      "stringValue": "apply_async"
+                    }
+                  },
+                  {
+                    "key": "celery.task_name",
+                    "value": {
+                      "stringValue": "worker.save_async_submission"
+                    }
+                  },
+                  {
+                    "key": "messaging.destination",
+                    "value": {
+                      "stringValue": "celery"
+                    }
+                  },
+                  {
+                    "key": "messaging.destination_kind",
+                    "value": {
+                      "stringValue": "queue"
+                    }
+                  },
+                  {
+                    "key": "messaging.message.id",
+                    "value": {
+                      "stringValue": "6c7b12c0-3c39-4d26-a64b-571c1ee6ad6d"
+                    }
+                  }
+                ],
+                "status": {}
+              }
+            ]
+          },
+          {
+            "scope": {
+              "name": "opentelemetry.instrumentation.flask",
+              "version": "0.66b2"
+            },
+            "spans": [
+              {
+                "traceId": "f4dda3f9e64d6038e8036c296bad1a6e",
+                "spanId": "97e06d6bb75ad297",
+                "parentSpanId": "",
+                "name": "POST /flask/async-form",
+                "kind": 2,
+                "startTimeUnixNano": "1793841804225045547",
+                "endTimeUnixNano": "1793841804265198686",
+                "attributes": [
+                  {
+                    "key": "http.flavor",
+                    "value": {
+                      "stringValue": "1.1"
+                    }
+                  },
+                  {
+                    "key": "http.host",
+                    "value": {
+                      "stringValue": "localhost:8080"
+                    }
+                  },
+                  {
+                    "key": "http.method",
+                    "value": {
+                      "stringValue": "POST"
+                    }
+                  },
+                  {
+                    "key": "http.route",
+                    "value": {
+                      "stringValue": "/flask/async-form"
+                    }
+                  },
+                  {
+                    "key": "http.scheme",
+                    "value": {
+                      "stringValue": "http"
+                    }
+                  },
+                  {
+                    "key": "http.server_name",
+                    "value": {
+                      "stringValue": "0.0.0.0"
+                    }
+                  },
+                  {
+                    "key": "http.status_code",
+                    "value": {
+                      "intValue": "302"
+                    }
+                  },
+                  {
+                    "key": "http.target",
+                    "value": {
+                      "stringValue": "/flask/async-form"
+                    }
+                  },
+                  {
+                    "key": "http.user_agent",
+                    "value": {
+                      "stringValue": "curl/8.5.0"
+                    }
+                  },
+                  {
+                    "key": "net.host.name",
+                    "value": {
+                      "stringValue": "localhost:8080"
+                    }
+                  },
+                  {
+                    "key": "net.host.port",
+                    "value": {
+                      "intValue": "5000"
+                    }
+                  },
+                  {
+                    "key": "net.peer.ip",
+                    "value": {
+                      "stringValue": "172.18.0.9"
+                    }
+                  },
+                  {
+                    "key": "net.peer.port",
+                    "value": {
+                      "intValue": "43670"
+                    }
+                  }
+                ],
+                "status": {}
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
