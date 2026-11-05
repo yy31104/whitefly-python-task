@@ -18,16 +18,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from celery.contrib.testing.worker import start_worker  # noqa: E402
-from google.protobuf.json_format import MessageToJson  # noqa: E402
-from opentelemetry import trace  # noqa: E402
-from opentelemetry.exporter.otlp.proto.common.trace_encoder import (  # noqa: E402
+from celery.contrib.testing.worker import start_worker
+from google.protobuf.json_format import MessageToJson
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.common.trace_encoder import (
     encode_spans,
 )
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource  # noqa: E402
-from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E402
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
 
