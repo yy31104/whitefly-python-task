@@ -228,7 +228,7 @@ def test_sync_malformed_idempotency_key_is_ignored(client):
     assert row.idempotency_key is None
 
 
-def test_sync_same_idempotency_key_different_payload_returns_409(client):
+def test_sync_same_idempotency_key_different_payload_returns_422(client):
     first = client.post(
         "/sync-form",
         data={
@@ -253,8 +253,8 @@ def test_sync_same_idempotency_key_different_payload_returns_409(client):
     )
 
     assert first.status_code == 302
-    assert second.status_code == 409
-    assert b"Submission conflicts with a previous idempotency key." in second.data
+    assert second.status_code == 422
+    assert b"already used for a different submission" in second.data
     assert uuid.UUID(_extract_hidden_idempotency_key(second)).version == 4
     assert _count_submissions() == 1
 
@@ -347,16 +347,12 @@ def test_async_form_status_region_uses_flask_prefix(tmp_path):
 def test_async_post_with_idempotency_key_passes_key_to_task(client, monkeypatch):
     calls: list[dict[str, str]] = []
 
-    class DummyTaskResult:
-        id = "task-with-key"
-
-    def fake_delay(**kwargs):
-        calls.append(kwargs)
-        return DummyTaskResult()
+    def fake_apply_async(kwargs=None, task_id=None, **_options):
+        calls.append({**kwargs, "_task_id": task_id})
 
     from worker.tasks import save_async_submission_task
 
-    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+    monkeypatch.setattr(save_async_submission_task, "apply_async", fake_apply_async)
 
     response = client.post(
         "/async-form",
@@ -792,3 +788,52 @@ def test_request_id_context_clears_after_error(tmp_path):
     assert response.status_code == 500
     assert response.headers["X-Request-ID"] == "flask-error-request-id"
     assert get_request_id() is None
+
+
+def test_async_same_key_twice_returns_409_while_in_flight(client, monkeypatch):
+    from worker.tasks import save_async_submission_task
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        save_async_submission_task,
+        "apply_async",
+        lambda kwargs=None, task_id=None, **_: calls.append(kwargs),
+    )
+    data = {
+        "first_name": "Grace",
+        "last_name": "Hopper",
+        "email": "flask-in-flight@example.com",
+        "honeypot": "",
+        "idempotency_key": "flask-in-flight-key",
+    }
+
+    first = client.post("/async-form", data=data, follow_redirects=False)
+    second = client.post("/async-form", data=data, follow_redirects=False)
+
+    assert first.status_code == 302
+    assert second.status_code == 409
+    assert b"still being processed" in second.data
+    assert len(calls) == 1
+
+
+def test_async_same_key_different_payload_returns_422(client, monkeypatch):
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(
+        save_async_submission_task,
+        "apply_async",
+        lambda kwargs=None, task_id=None, **_: None,
+    )
+    base = {
+        "last_name": "Hopper",
+        "email": "flask-reuse@example.com",
+        "honeypot": "",
+        "idempotency_key": "flask-reuse-key",
+    }
+
+    first = client.post("/async-form", data={**base, "first_name": "Grace"})
+    second = client.post("/async-form", data={**base, "first_name": "Ada"})
+
+    assert first.status_code == 302
+    assert second.status_code == 422
+    assert b"already used for a different submission" in second.data

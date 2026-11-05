@@ -48,3 +48,24 @@ class TaskStatus(Base):
         nullable=False,
         default=lambda: datetime.now(UTC),
     )
+
+
+class IdempotencyClaim(Base):
+    """Which task currently owns an async idempotency key.
+
+    The primary key is the idempotency key itself, so inserting a claim is the
+    atomic "first request wins" step. The fingerprint lets a later request with
+    the same key be classified as a replay (same payload) or a misuse (different
+    payload) without storing the payload.
+    """
+
+    __tablename__ = "idempotency_claims"
+
+    idempotency_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )

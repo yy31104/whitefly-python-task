@@ -21,7 +21,8 @@ from shared.rate_limit import (
     trusted_client_identifier,
 )
 from shared.services import (
-    IdempotencyConflict,
+    IdempotencyKeyMismatch,
+    IdempotencyRequestInFlight,
     QueueUnavailable,
     create_submission_sync,
     enqueue_submission_async,
@@ -92,13 +93,29 @@ def sync_form():
             )
             response.headers["Retry-After"] = str(exc.retry_after)
             return response
-        except IdempotencyConflict:
-            flash("Submission conflicts with a previous idempotency key.", "error")
+        except IdempotencyKeyMismatch:
+            flash(
+                "This idempotency key was already used for a different submission.",
+                "error",
+            )
             return (
                 render_template(
                     "sync_form.html",
                     form_data=form_data,
                     idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                422,
+            )
+        except IdempotencyRequestInFlight:
+            flash(
+                "A submission with this idempotency key is still being processed.",
+                "error",
+            )
+            return (
+                render_template(
+                    "sync_form.html",
+                    form_data=form_data,
+                    idempotency_key=idempotency_key,
                 ),
                 409,
             )
@@ -152,6 +169,32 @@ def async_form():
             )
             response.headers["Retry-After"] = str(exc.retry_after)
             return response
+        except IdempotencyKeyMismatch:
+            flash(
+                "This idempotency key was already used for a different submission.",
+                "error",
+            )
+            return (
+                render_template(
+                    "async_form.html",
+                    form_data=form_data,
+                    idempotency_key=_fresh_form_idempotency_key(),
+                ),
+                422,
+            )
+        except IdempotencyRequestInFlight:
+            flash(
+                "A submission with this idempotency key is still being processed.",
+                "error",
+            )
+            return (
+                render_template(
+                    "async_form.html",
+                    form_data=form_data,
+                    idempotency_key=idempotency_key,
+                ),
+                409,
+            )
         except QueueUnavailable as exc:
             flash(str(exc), "error")
             return (

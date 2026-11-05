@@ -14,7 +14,8 @@ from shared.rate_limit import (
     trusted_client_identifier,
 )
 from shared.services import (
-    IdempotencyConflict,
+    IdempotencyKeyMismatch,
+    IdempotencyRequestInFlight,
     QueueUnavailable,
     create_submission_sync,
     enqueue_submission_async,
@@ -141,13 +142,24 @@ async def sync_form_post(
         )
         response.headers["Retry-After"] = str(exc.retry_after)
         return response
-    except IdempotencyConflict:
+    except IdempotencyKeyMismatch:
         return templates.TemplateResponse(
             request=request,
             name="sync_form.html",
             context=_context(
                 form_data=form_data,
-                message="Submission conflicts with a previous idempotency key.",
+                message="This idempotency key was already used for a different submission.",
+                category="error",
+            ),
+            status_code=422,
+        )
+    except IdempotencyRequestInFlight:
+        return templates.TemplateResponse(
+            request=request,
+            name="sync_form.html",
+            context=_context(
+                form_data=form_data,
+                message="A submission with this idempotency key is still being processed.",
                 category="error",
             ),
             status_code=409,
@@ -219,6 +231,28 @@ async def async_form_post(
         )
         response.headers["Retry-After"] = str(exc.retry_after)
         return response
+    except IdempotencyKeyMismatch:
+        return templates.TemplateResponse(
+            request=request,
+            name="async_form.html",
+            context=_context(
+                form_data=form_data,
+                message="This idempotency key was already used for a different submission.",
+                category="error",
+            ),
+            status_code=422,
+        )
+    except IdempotencyRequestInFlight:
+        return templates.TemplateResponse(
+            request=request,
+            name="async_form.html",
+            context=_context(
+                form_data=form_data,
+                message="A submission with this idempotency key is still being processed.",
+                category="error",
+            ),
+            status_code=409,
+        )
     except QueueUnavailable as exc:
         return templates.TemplateResponse(
             request=request,

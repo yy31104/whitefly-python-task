@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -10,11 +11,14 @@ from shared.db import init_database, session_scope
 from shared.models import Submission, TaskStatus
 from shared.services import (
     IdempotencyConflict,
+    IdempotencyKeyMismatch,
+    IdempotencyRequestInFlight,
     create_submission_sync,
     enqueue_submission_async,
     list_submissions,
     save_submission_from_worker,
 )
+from shared.task_status import record_task_status
 
 
 @pytest.fixture
@@ -247,18 +251,7 @@ def test_enqueue_submission_async_passes_idempotency_key_and_writes_queued_statu
     monkeypatch, tmp_path
 ):
     init_database(f"sqlite:///{(tmp_path / 'enqueue_task_status.db').as_posix()}")
-    calls: list[dict[str, str]] = []
-
-    class DummyTaskResult:
-        id = "task-service-idempotency"
-
-    def fake_delay(**kwargs):
-        calls.append(kwargs)
-        return DummyTaskResult()
-
-    from worker.tasks import save_async_submission_task
-
-    monkeypatch.setattr(save_async_submission_task, "delay", fake_delay)
+    calls = _capture_apply_async(monkeypatch)
 
     task_id = enqueue_submission_async(
         first_name="Grace",
@@ -267,12 +260,119 @@ def test_enqueue_submission_async_passes_idempotency_key_and_writes_queued_statu
         idempotency_key="service-async-key",
     )
 
-    assert task_id == "task-service-idempotency"
-    assert calls[0]["idempotency_key"] == "service-async-key"
-    status = _get_task_status("task-service-idempotency")
+    assert calls[0]["task_id"] == task_id
+    assert calls[0]["kwargs"]["idempotency_key"] == "service-async-key"
+    status = _get_task_status(task_id)
     assert status.status == "queued"
     assert status.retries == 0
     assert status.submission_id is None
+
+
+def _capture_apply_async(monkeypatch) -> list[dict]:
+    calls: list[dict] = []
+
+    def fake_apply_async(kwargs=None, task_id=None, **_options):
+        calls.append({"kwargs": kwargs, "task_id": task_id})
+
+    from worker.tasks import save_async_submission_task
+
+    monkeypatch.setattr(save_async_submission_task, "apply_async", fake_apply_async)
+    return calls
+
+
+def _enqueue(key: str, first_name: str = "Grace") -> str:
+    return enqueue_submission_async(
+        first_name=first_name,
+        last_name="Hopper",
+        email="claim@example.com",
+        idempotency_key=key,
+    )
+
+
+def test_async_same_key_while_queued_is_in_flight_409(monkeypatch, tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'claim_in_flight.db').as_posix()}")
+    calls = _capture_apply_async(monkeypatch)
+
+    _enqueue("claim-in-flight")
+    with pytest.raises(IdempotencyRequestInFlight):
+        _enqueue("claim-in-flight")
+
+    assert len(calls) == 1
+
+
+def test_async_same_key_different_payload_is_mismatch_422(monkeypatch, tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'claim_mismatch.db').as_posix()}")
+    calls = _capture_apply_async(monkeypatch)
+
+    _enqueue("claim-mismatch", first_name="Grace")
+    with pytest.raises(IdempotencyKeyMismatch):
+        _enqueue("claim-mismatch", first_name="Ada")
+
+    assert len(calls) == 1
+
+
+def test_async_replay_after_processed_returns_original_task(monkeypatch, tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'claim_replay.db').as_posix()}")
+    calls = _capture_apply_async(monkeypatch)
+
+    first = _enqueue("claim-replay")
+    record_task_status(first, "processed", submission_id=1)
+    replay = _enqueue("claim-replay")
+
+    assert replay == first
+    assert len(calls) == 1
+
+
+def test_async_retry_after_failure_claims_a_new_task(monkeypatch, tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'claim_retry.db').as_posix()}")
+    calls = _capture_apply_async(monkeypatch)
+
+    first = _enqueue("claim-retry")
+    record_task_status(first, "failed", error_type="OperationalError")
+    second = _enqueue("claim-retry")
+
+    assert second != first
+    assert [call["task_id"] for call in calls] == [first, second]
+    assert _get_task_status(second).status == "queued"
+
+
+def test_sync_with_key_owned_by_in_flight_async_is_409(monkeypatch, tmp_path):
+    init_database(f"sqlite:///{(tmp_path / 'claim_sync.db').as_posix()}")
+    _capture_apply_async(monkeypatch)
+
+    _enqueue("claim-shared")
+    with pytest.raises(IdempotencyRequestInFlight):
+        create_submission_sync(
+            first_name="Grace",
+            last_name="Hopper",
+            email="claim@example.com",
+            idempotency_key="claim-shared",
+        )
+
+
+def test_concurrent_first_requests_enqueue_exactly_once(monkeypatch, tmp_path):
+    """Both threads try to claim the same new key; the primary key admits one."""
+    init_database(f"sqlite:///{(tmp_path / 'claim_race.db').as_posix()}")
+    calls = _capture_apply_async(monkeypatch)
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+
+    def worker() -> None:
+        barrier.wait()
+        try:
+            _enqueue("claim-race")
+            outcomes.append("enqueued")
+        except IdempotencyRequestInFlight:
+            outcomes.append("in_flight")
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(outcomes) == ["enqueued", "in_flight"]
+    assert len(calls) == 1
 
 
 def test_enqueue_submission_async_omits_blank_idempotency_key(monkeypatch):
