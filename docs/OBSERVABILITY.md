@@ -98,7 +98,7 @@ POST /fastapi/async-form [server] whitefly-fastapi 82.1 ms
 
 ### What the Flask trace showed
 
-The two worker subtrees differ, and the difference is a pre-existing bug, not a tracing artefact.
+The two worker subtrees differ, and the difference was a worker bug, not a tracing artefact.
 
 The Flask submission was the first task handled by worker child `ForkPoolWorker-4`. Its first worker span is a `pg_catalog` table check from `init_database()`, and it has no `UPDATE task_statuses` for `processing`. The worker log for that task shows why:
 
@@ -106,9 +106,9 @@ The Flask submission was the first task handled by worker child `ForkPoolWorker-
 "message":"task status write failed","event":"task_status_write_failed","status":"processing","error_type":"RuntimeError"
 ```
 
-[`worker/tasks.py`](../worker/tasks.py) writes the `processing` status before it calls `_ensure_database_ready()`. In a freshly forked child the engine does not exist yet, so the best-effort write raises `RuntimeError("Database not initialized")`, which is logged and swallowed. The task's status then goes straight from `queued` to `processed`.
+When these traces were exported, [`worker/tasks.py`](../worker/tasks.py) wrote the `processing` status before it called `_ensure_database_ready()`. In a freshly forked child the engine did not exist yet, so the best-effort write raised `RuntimeError("Database not initialized")`, which was logged and swallowed. The task's status then went straight from `queued` to `processed`.
 
-The FastAPI submission was the second task on the same child, so it shows the `processing` UPDATE. The in-process tests never hit this, because their engine is already initialized. This PR leaves the bug alone; it is out of scope here.
+The FastAPI submission was the second task on the same child, so it shows the `processing` UPDATE. The in-process tests never hit this, because their engine is already initialized. The worker now initializes the database before writing `processing`, and [`tests/worker/test_first_task.py`](../tests/worker/test_first_task.py) checks it in a real forked child.
 
 ### Break it, on the running stack
 
