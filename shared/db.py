@@ -7,6 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from shared.telemetry import instrument_engine
+
 
 class Base(DeclarativeBase):
     """Base declarative class shared by all ORM models."""
@@ -30,6 +32,7 @@ def init_database(database_url: str) -> None:
     global _engine
 
     _engine = _build_engine(database_url)
+    instrument_engine(_engine)
     SessionLocal.configure(bind=_engine)
 
     # Import models so metadata is fully populated before create_all().

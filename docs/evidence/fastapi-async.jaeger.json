@@ -1,0 +1,1040 @@
+{
+  "data": [
+    {
+      "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+      "spans": [
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "fb38c794e68caf0d",
+          "operationName": "INSERT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865477273,
+          "duration": 461,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "INSERT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "INSERT INTO task_statuses (task_id, status, submission_id, error_type, retries, created_at, updated_at) VALUES (%(task_id)s, %(status)s, %(submission_id)s, %(error_type)s, %(retries)s, %(created_at)s, %(updated_at)s) RETURNING task_statuses.id"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "0c62eb83a4ee8282",
+          "operationName": "UPDATE whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "e4cffd835ae75f16"
+            }
+          ],
+          "startTime": 1793841865498840,
+          "duration": 748,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "UPDATE whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "UPDATE task_statuses SET status=%(status)s, submission_id=%(submission_id)s, error_type=%(error_type)s, retries=%(retries)s, updated_at=%(updated_at)s WHERE task_statuses.task_id = %(task_id_1)s AND (task_statuses.status NOT IN (%(status_1_1)s, %(status_1_2)s))"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "5d9717d625b2358b",
+          "operationName": "UPDATE whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "e4cffd835ae75f16"
+            }
+          ],
+          "startTime": 1793841865507053,
+          "duration": 416,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "UPDATE whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "UPDATE task_statuses SET status=%(status)s, submission_id=%(submission_id)s, error_type=%(error_type)s, retries=%(retries)s, updated_at=%(updated_at)s WHERE task_statuses.task_id = %(task_id_1)s AND (task_statuses.status NOT IN (%(status_1_1)s, %(status_1_2)s))"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "e8e3af1c30775377",
+          "operationName": "SELECT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865469512,
+          "duration": 1131,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "SELECT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "SELECT idempotency_claims.idempotency_key, idempotency_claims.request_fingerprint, idempotency_claims.task_id, idempotency_claims.created_at \nFROM idempotency_claims \nWHERE idempotency_claims.idempotency_key = %(pk_1)s"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "8a68cb03f7f30900",
+          "operationName": "INSERT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865472040,
+          "duration": 394,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "INSERT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "INSERT INTO idempotency_claims (idempotency_key, request_fingerprint, task_id, created_at) VALUES (%(idempotency_key)s, %(request_fingerprint)s, %(task_id)s, %(created_at)s)"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "6c0c1273758f2862",
+          "operationName": "apply_async/worker.save_async_submission",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865489587,
+          "duration": 5104,
+          "tags": [
+            {
+              "key": "celery.action",
+              "type": "string",
+              "value": "apply_async"
+            },
+            {
+              "key": "celery.task_name",
+              "type": "string",
+              "value": "worker.save_async_submission"
+            },
+            {
+              "key": "messaging.destination",
+              "type": "string",
+              "value": "celery"
+            },
+            {
+              "key": "messaging.destination_kind",
+              "type": "string",
+              "value": "queue"
+            },
+            {
+              "key": "messaging.message.id",
+              "type": "string",
+              "value": "028b0494-c614-4d32-bc3d-58a3d1a8bbd2"
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.celery"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "producer"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "e4985b3ca0af3f09",
+          "operationName": "INSERT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "e4cffd835ae75f16"
+            }
+          ],
+          "startTime": 1793841865503447,
+          "duration": 389,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "INSERT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "INSERT INTO submissions (first_name, last_name, email, form_type, status, idempotency_key, created_at) VALUES (%(first_name)s, %(last_name)s, %(email)s, %(form_type)s, %(status)s, %(idempotency_key)s, %(created_at)s) RETURNING submissions.id"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "7b538e1fe1ee6ae9",
+          "operationName": "SELECT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "e4cffd835ae75f16"
+            }
+          ],
+          "startTime": 1793841865505444,
+          "duration": 284,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "SELECT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "SELECT submissions.id, submissions.first_name, submissions.last_name, submissions.email, submissions.form_type, submissions.status, submissions.idempotency_key, submissions.created_at \nFROM submissions \nWHERE submissions.id = %(pk_1)s"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "e4cffd835ae75f16",
+          "operationName": "run/worker.save_async_submission",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "6c0c1273758f2862"
+            }
+          ],
+          "startTime": 1793841865496977,
+          "duration": 11678,
+          "tags": [
+            {
+              "key": "celery.action",
+              "type": "string",
+              "value": "run"
+            },
+            {
+              "key": "celery.delivery_info",
+              "type": "string",
+              "value": "{'exchange': '', 'routing_key': 'celery', 'priority': 0, 'redelivered': False}"
+            },
+            {
+              "key": "celery.hostname",
+              "type": "string",
+              "value": "gen1@33dd1ebdc035"
+            },
+            {
+              "key": "celery.reply_to",
+              "type": "string",
+              "value": "500fce65-b1dd-3ed4-939e-5f0b7fec973d"
+            },
+            {
+              "key": "celery.state",
+              "type": "string",
+              "value": "SUCCESS"
+            },
+            {
+              "key": "celery.task_name",
+              "type": "string",
+              "value": "worker.save_async_submission"
+            },
+            {
+              "key": "messaging.conversation_id",
+              "type": "string",
+              "value": "028b0494-c614-4d32-bc3d-58a3d1a8bbd2"
+            },
+            {
+              "key": "messaging.destination",
+              "type": "string",
+              "value": "celery"
+            },
+            {
+              "key": "messaging.message.id",
+              "type": "string",
+              "value": "028b0494-c614-4d32-bc3d-58a3d1a8bbd2"
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.celery"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "consumer"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "e0b72617487fd01a",
+          "operationName": "POST /fastapi/async-form http send",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865498831,
+          "duration": 46,
+          "tags": [
+            {
+              "key": "asgi.event.type",
+              "type": "string",
+              "value": "http.response.start"
+            },
+            {
+              "key": "http.status_code",
+              "type": "int64",
+              "value": 303
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.fastapi"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "internal"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "59538094f362b8b9",
+          "operationName": "SELECT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865475277,
+          "duration": 720,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "SELECT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "SELECT task_statuses.id AS task_statuses_id, task_statuses.task_id AS task_statuses_task_id, task_statuses.status AS task_statuses_status, task_statuses.submission_id AS task_statuses_submission_id, task_statuses.error_type AS task_statuses_error_type, task_statuses.retries AS task_statuses_retries, task_statuses.created_at AS task_statuses_created_at, task_statuses.updated_at AS task_statuses_updated_at \nFROM task_statuses \nWHERE task_statuses.task_id = %(task_id_1)s"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "f4fec615b6643980",
+          "operationName": "SELECT whitefly",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "e4cffd835ae75f16"
+            }
+          ],
+          "startTime": 1793841865502275,
+          "duration": 382,
+          "tags": [
+            {
+              "key": "db.name",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "db.operation",
+              "type": "string",
+              "value": "SELECT whitefly"
+            },
+            {
+              "key": "db.statement",
+              "type": "string",
+              "value": "SELECT submissions.id AS submissions_id, submissions.first_name AS submissions_first_name, submissions.last_name AS submissions_last_name, submissions.email AS submissions_email, submissions.form_type AS submissions_form_type, submissions.status AS submissions_status, submissions.idempotency_key AS submissions_idempotency_key, submissions.created_at AS submissions_created_at \nFROM submissions \nWHERE submissions.idempotency_key = %(idempotency_key_1)s"
+            },
+            {
+              "key": "db.system",
+              "type": "string",
+              "value": "postgresql"
+            },
+            {
+              "key": "db.user",
+              "type": "string",
+              "value": "whitefly"
+            },
+            {
+              "key": "net.peer.name",
+              "type": "string",
+              "value": "postgres"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 5432
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.sqlalchemy"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "client"
+            }
+          ],
+          "logs": [],
+          "processID": "p2",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "644522a34c5551d5",
+          "operationName": "POST /fastapi/async-form http receive",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865418938,
+          "duration": 29,
+          "tags": [
+            {
+              "key": "asgi.event.type",
+              "type": "string",
+              "value": "http.request"
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.fastapi"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "internal"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "fc5700a15202fbd5",
+          "operationName": "POST /fastapi/async-form http send",
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+              "spanID": "bab991fc5d79c888"
+            }
+          ],
+          "startTime": 1793841865499356,
+          "duration": 12,
+          "tags": [
+            {
+              "key": "asgi.event.type",
+              "type": "string",
+              "value": "http.response.body"
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.fastapi"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "internal"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        },
+        {
+          "traceID": "ba40e16c062b90fbf230e5cd9b2e2b1c",
+          "spanID": "bab991fc5d79c888",
+          "operationName": "POST /fastapi/async-form",
+          "references": [],
+          "startTime": 1793841865417403,
+          "duration": 82082,
+          "tags": [
+            {
+              "key": "http.flavor",
+              "type": "string",
+              "value": "1.1"
+            },
+            {
+              "key": "http.host",
+              "type": "string",
+              "value": "172.18.0.8:8000"
+            },
+            {
+              "key": "http.method",
+              "type": "string",
+              "value": "POST"
+            },
+            {
+              "key": "http.route",
+              "type": "string",
+              "value": "/fastapi/async-form"
+            },
+            {
+              "key": "http.scheme",
+              "type": "string",
+              "value": "http"
+            },
+            {
+              "key": "http.server_name",
+              "type": "string",
+              "value": "localhost:8080"
+            },
+            {
+              "key": "http.status_code",
+              "type": "int64",
+              "value": 303
+            },
+            {
+              "key": "http.target",
+              "type": "string",
+              "value": "/fastapi/async-form"
+            },
+            {
+              "key": "http.url",
+              "type": "string",
+              "value": "http://localhost:8080/fastapi/async-form"
+            },
+            {
+              "key": "http.user_agent",
+              "type": "string",
+              "value": "curl/8.5.0"
+            },
+            {
+              "key": "net.host.port",
+              "type": "int64",
+              "value": 8000
+            },
+            {
+              "key": "net.peer.ip",
+              "type": "string",
+              "value": "172.18.0.9"
+            },
+            {
+              "key": "net.peer.port",
+              "type": "int64",
+              "value": 33588
+            },
+            {
+              "key": "otel.scope.name",
+              "type": "string",
+              "value": "opentelemetry.instrumentation.fastapi"
+            },
+            {
+              "key": "otel.scope.version",
+              "type": "string",
+              "value": "0.66b2"
+            },
+            {
+              "key": "span.kind",
+              "type": "string",
+              "value": "server"
+            }
+          ],
+          "logs": [],
+          "processID": "p1",
+          "warnings": null
+        }
+      ],
+      "processes": {
+        "p1": {
+          "serviceName": "whitefly-fastapi",
+          "tags": [
+            {
+              "key": "service.instance.id",
+              "type": "string",
+              "value": "c6b0ddef-5c69-4b58-a62e-8a6604b882b5"
+            },
+            {
+              "key": "telemetry.sdk.language",
+              "type": "string",
+              "value": "python"
+            },
+            {
+              "key": "telemetry.sdk.name",
+              "type": "string",
+              "value": "opentelemetry"
+            },
+            {
+              "key": "telemetry.sdk.version",
+              "type": "string",
+              "value": "1.45.2"
+            }
+          ]
+        },
+        "p2": {
+          "serviceName": "whitefly-worker",
+          "tags": [
+            {
+              "key": "service.instance.id",
+              "type": "string",
+              "value": "be215214-b7f8-4f6f-a183-f6bf0f1852db"
+            },
+            {
+              "key": "telemetry.sdk.language",
+              "type": "string",
+              "value": "python"
+            },
+            {
+              "key": "telemetry.sdk.name",
+              "type": "string",
+              "value": "opentelemetry"
+            },
+            {
+              "key": "telemetry.sdk.version",
+              "type": "string",
+              "value": "1.45.2"
+            }
+          ]
+        }
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

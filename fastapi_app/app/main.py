@@ -16,6 +16,11 @@ from shared.logging import (
     resolve_request_id,
     set_request_id,
 )
+from shared.telemetry import (
+    configure_tracing,
+    instrument_celery,
+    instrument_fastapi_app,
+)
 
 logger = logging.getLogger(__name__)
 _FORM_POST_PATHS = {"/sync-form", "/async-form"}
@@ -45,6 +50,8 @@ def create_app(
     url_prefix: str | None = None,
 ) -> FastAPI:
     configure_logging()
+    configure_tracing("whitefly-fastapi")
+    instrument_celery()
 
     app = FastAPI(title="Whitefly FastAPI App")
 
@@ -73,6 +80,7 @@ def create_app(
     _register_request_observability(app)
     _register_error_observability(app)
     app.include_router(router, prefix=prefix)
+    instrument_fastapi_app(app)
     return app
 
 
